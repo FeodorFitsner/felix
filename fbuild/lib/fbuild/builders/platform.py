@@ -19,17 +19,20 @@ class UnknownPlatform(fbuild.ConfigFailed):
 
 # ------------------------------------------------------------------------------
 
+# map of architecture names to match against
+# please keep most specific names above more general ones (matching occurs 
+# top down)
 archmap = {
-    'irix':      {'posix', 'irix'},
     'irix64':    {'posix', 'irix', 'irix64'},
+    'irix':      {'posix', 'irix'},
     'unix':      {'posix'},
     'posix':     {'posix'},
-    'linux':     {'posix', 'linux'},
     'gnu/linux': {'posix', 'linux'},
+    'linux':     {'posix', 'linux'},
     'solaris':   {'posix', 'solaris'},
     'sunos':     {'posix', 'solaris', 'sunos'},
-    'cygwin':    {'posix', 'cygwin'},
     'nocygwin':  {'posix', 'cygwin', 'nocygwin'},
+    'cygwin':    {'posix', 'cygwin'},
     'mingw':     {'posix', 'mingw'},
     'windows':   {'windows', 'win32'},
     'nt':        {'windows', 'win32', 'nt'},
@@ -43,9 +46,9 @@ archmap = {
     'darwin':    {'posix', 'bsd', 'darwin', 'macosx'},
     'osx':       {'posix', 'bsd', 'darwin', 'macosx'},
 
-    'iphone':           {'posix', 'bsd', 'darwin', 'iphone'},
-    'iphone-sim':       {'posix', 'bsd', 'darwin', 'iphone', 'simulator'},
     'iphone-simulator': {'posix', 'bsd', 'darwin', 'iphone', 'simulator'},
+    'iphone-sim':       {'posix', 'bsd', 'darwin', 'iphone', 'simulator'},
+    'iphone':           {'posix', 'bsd', 'darwin', 'iphone'},
 }
 
 # ------------------------------------------------------------------------------
@@ -56,7 +59,12 @@ def guess_platform(ctx, arch=None):
     features of the specified I{platform}. If I{platform} is I{None}, try to
     determine which platform the system is and return that value. If the
     platform cannot be determined, return I{None}."""
+
     ctx.logger.check('determining platform')
+
+    architecture = None
+
+    # if no arch available, try to get one from the system
     if arch is None:
         # First lets see if uname exists
         try:
@@ -78,14 +86,20 @@ def guess_platform(ctx, arch=None):
                 arch = stdout.decode('utf-8').strip().lower()
                 if arch == 'windowsnt' or 'mingw' in arch: arch = 'windows'
 
-    try:
-        architecture = archmap[arch]
-    except KeyError:
+    # now search for the general "kind" of platform
+    for key in archmap.keys():
+        if key in arch:
+            architecture = archmap[key]
+            break
+
+    # no match, raise error
+    if architecture is None:
         ctx.logger.failed()
         raise UnknownPlatform(arch)
-    else:
-        ctx.logger.passed(architecture)
-        return frozenset(architecture)
+
+    # we should have an architecture here
+    ctx.logger.passed(architecture)
+    return frozenset(architecture)
 
 # ------------------------------------------------------------------------------
 
