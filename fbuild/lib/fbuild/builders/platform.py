@@ -84,7 +84,6 @@ def guess_platform(ctx, arch=None):
                 arch = platform.system().lower()
             else:
                 arch = stdout.decode('utf-8').strip().lower()
-                if arch == 'windowsnt' or 'mingw' in arch: arch = 'windows'
 
     # now search for the general "kind" of platform
     for key in archmap.keys():
