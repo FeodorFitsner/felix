@@ -38,6 +38,10 @@ ifeq ($(platform), Linux)
 else
 	ifeq ($(platform), Darwin)
 		LPATH = DYLD_LIBRARY_PATH
+	else  
+		ifeq ($(platform), CYGWIN_NT-6.1)
+			LPATH = LD_LIBRARY_PATH
+		endif
 	endif
 endif
 ifndef LPATH
