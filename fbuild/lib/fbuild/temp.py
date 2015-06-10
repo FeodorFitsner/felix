@@ -1,6 +1,7 @@
 import contextlib
 import tempfile as _tempfile
 import textwrap
+import os
 
 from fbuild.path import Path
 
@@ -34,7 +35,12 @@ def tempfile(src='', suffix='', name='temp', **kwargs):
 
     with tempdir(**kwargs) as dirname:
         name = dirname / name + suffix
+
         with open(name, 'w') as f:
             print(textwrap.dedent(src), file=f)
+
+        # verify that the file was created
+        if not os.path.exists(name):
+            raise("tempfile failed to create (%s)" % name)
 
         yield Path(name)

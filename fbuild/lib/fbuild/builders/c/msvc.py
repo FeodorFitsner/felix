@@ -12,7 +12,7 @@ from fbuild.temp import tempdir, tempfile
 # ------------------------------------------------------------------------------
 
 class Cl(fbuild.db.PersistentObject):
-    def __init__(self, ctx, exe='cl.exe', *,
+    def __init__(self, ctx, exe='cl', *,
             pre_flags=[],
             flags=[],
             includes=[],

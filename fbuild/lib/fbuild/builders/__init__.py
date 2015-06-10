@@ -36,7 +36,7 @@ def find_program(ctx, names, paths=None, *, quieter=0):
 
     # If we're running on windows, we need to append '.exe' to the filenames
     # that we're searching for.
-    if sys.platform == 'win32':
+    if sys.platform == 'win32' or sys.platform == 'cygwin':
         new_names = []
         for name in names:
             if \
