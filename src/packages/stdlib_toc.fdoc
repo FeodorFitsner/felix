@@ -4,7 +4,7 @@
 <dd>First we require basic C interfaces...</dd>
 
 <dt><a href=core_scalar_types.fdoc>Core Scalar Types</a></dt>
-<dd>So we lift some basic types from C.dd>
+<dd>So we lift some basic types from C.<dd>
 </dl>
 
 
@@ -19,6 +19,15 @@
 
 <dt><a href=strings.fdoc>Methods of Strings</a></dt>
 <dd>and functions of strings</dd>
+</dl>
+
+<dt><a href=arrays.fdoc>Array like Data types</a></dt>
+<dd>Array algebra, arrays, variable length arrays, dynamic length arrays, sparse arrays</dd>
+</dl>
+
+
+<dt><a href=lists.fdoc>List like Data types</a></dt>
+<dd>Functional lists, association lists, random access lists, doubly linked lists, an S-expressions</dd>
 </dl>
 
 
