@@ -1,0 +1,93 @@
+@tangler stream.flx = share/lib/std/control/stream.flx
+@title Streamable data types and iterators
+@h1 Streams
+@tangle stream.flx
+//$ Class of data structures supporting streaming.
+//$ The container type just needs an iterator method.
+//$ The iterator method returns a generator which
+//$ yields the values stored in the container.
+open class Streamable[C1, V] {
+  virtual fun iterator : C1 -> 1 -> opt[V];
+
+  // check if a streamable x is a subset of a set y.
+  virtual fun \subseteq[C2 with Set[C2,V]] (x:C1, y:C2) = 
+  {
+    for v in x do
+      if not (v \in y) goto bad;
+    done
+    return true;
+bad:>
+    return false;
+  }
+
+  // subset or equal: variant equality bar
+  fun \subseteqq [C2 with Set[C2,V], Streamable[C2,V]] 
+    (x:C1, y:C2) => x \subseteq y
+  ;
+
+  // congruence (equality as sets)
+  virtual fun \cong[C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => x \subseteq y and y \subseteq x
+  ;
+
+  // negated congruence
+  fun \ncong[C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => not (x \cong y)
+  ;
+
+  // proper subset
+  virtual fun \subset [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => x \subseteq y and x \ncong y
+  ;
+
+  // variant proper relations with strke-through on equality bar
+  fun \subsetneq [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => x \subset y
+  ;
+  fun \subsetneqq [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => x \subset y
+  ;
+
+  // reversed relations, super set
+  fun \supset [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => y \subset x
+  ;
+
+  fun \supseteq [C2 with Set[C2,V], Streamable[C2,V]] 
+    (x:C1, y:C2) => y \subseteq x
+  ;
+
+  fun \supseteqq [C2 with Set[C2,V], Streamable[C2,V]] 
+    (x:C1, y:C2) => y \subseteq x
+  ;
+  // variant proper relations with strke-through on equality bar
+  fun \supsetneq [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => x \supset y
+  ;
+  fun \supsetneqq [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => x \supset y
+  ;
+
+
+  // negated operators, strike-through
+  fun \nsubseteq [C2 with Set[C2,V], Streamable[C2,V]] 
+    (x:C1, y:C2) => not (x \subseteq y)
+  ;
+
+  fun \nsubseteqq [C2 with Set[C2,V], Streamable[C2,V]] 
+    (x:C1, y:C2) => not (x \subseteq y)
+  ;
+
+  // negated reversed operators, strike-through
+  fun \nsupseteq [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => not (x \supseteq y)
+  ;
+
+  fun \nsupseteqq [C2 with Set[C2,V], Streamable[C2,V], Set[C1,V]] 
+    (x:C1, y:C2) => not (x \supseteq y)
+  ;
+
+}
+
+
+

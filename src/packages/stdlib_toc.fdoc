@@ -1,5 +1,13 @@
 @title The Felix Standard Library
 @h1 Building the basics
+<dt><a href=basic_algebraic_structures.fdoc>Basic Algebraic Structure</a></dt>
+<dd>Now we have to define some basic algebraic structures...</dd>
+</dl>
+
+<dt><a href=logic.fdoc>Logic</a></dt>
+<dd>Boolean Logic</dd>
+</dl>
+
 <dt><a href=cheaders.fdoc>C Headers</a></dt>
 <dd>First we require basic C interfaces...</dd>
 
@@ -7,27 +15,82 @@
 <dd>So we lift some basic types from C.<dd>
 </dl>
 
+<dt><a href=control.fdoc>Control Flow primitives</a></dt>
+<dd>Interface to some RTL control features</dd>
+</dl>
 
-<dt><a href=basic_algebraic_structures.fdoc>Basic Algebraic Structure</a></dt>
-<dd>Now we have to define some basic algebraic structures...</dd>
+<dt><a href=char.fdoc>Characters</a></dt>
+<dd>Basic character type char.</dd>
 </dl>
 
 
-<dt><a href=numbers.fdoc>Methods of Numbers</a></dt>
+<dt><a href=numbers.fdoc>Numbers</a></dt>
 <dd>So we can conveniently define functions on numbers...</dd>
 </dl>
 
-<dt><a href=strings.fdoc>Methods of Strings</a></dt>
+<dt><a href=strings.fdoc>Strings</a></dt>
 <dd>and functions of strings</dd>
 </dl>
 
-<dt><a href=arrays.fdoc>Array like Data types</a></dt>
+<dt><a href=arrays.fdoc>Arrays</a></dt>
 <dd>Array algebra, arrays, variable length arrays, dynamic length arrays, sparse arrays</dd>
 </dl>
 
 
-<dt><a href=lists.fdoc>List like Data types</a></dt>
+<dt><a href=lists.fdoc>Lists</a></dt>
 <dd>Functional lists, association lists, random access lists, doubly linked lists, an S-expressions</dd>
+</dl>
+
+<dt><a href=streams.fdoc>Streams and Iterators</a></dt>
+<dd>Streamable data structures and iterators.</dd>
+</dl>
+
+
+<dt><a href=fibres.fdoc>Cooperative threading</a></dt>
+<dd>Support for fibres, synchronous channels, pipelines.</dd>
+</dl>
+
+
+<dt><a href=stl.fdoc>C++ Standard Template Library</a></dt>
+<dd>C++98 STL: iterators, vector, set, map, list, multiset, multimap, deque</dd>
+</dl>
+
+<dt><a href=pthreads.fdoc>Preemptive Threading</a></dt>
+<dd>Support for shared memory concurrency by pre-emptive threads and various 
+synchronisation devices.</dd>
+</dl>
+
+<dt><a href=program.fdoc>Programs and Processes</a></dt>
+<dd>Programs, ennvironment variables, command line options, shells, processes and dynamic linkage.</dd>
+</dl>
+
+<dt><a href=filesystem.fdoc>File System/Output</a></dt>
+<dd>File Name, Directories, File status, Base operations.</dd>
+</dl>
+
+<dt><a href=io.fdoc>Input/Output</a></dt>
+<dd>File I/O, Mice, Sockets, Timers, Events</dd>
+</dl>
+
+<dt><a href=time.fdoc>Time of Day</a></dt>
+<dd>Access to system real time clock.</dd>
+</dl>
+
+<dt><a href=db.fdoc>Database</a></dt>
+<dd>Basic Sqlite3 binding.</dd>
+</dl>
+
+<hr>
+
+<dt><a href=gc.fdoc>Garbage Collector</a></dt>
+<dd>Access to Garbage Collector</dd>
+</dl>
+
+
+<hr>
+
+<dt><a href=sdl.fdoc>Simple Direct Media Layer</a></dt>
+<dd>Binding for SDL2 including SDL_image and SDL_ttf</dd>
 </dl>
 
 

@@ -1,0 +1,248 @@
+@title Pointers
+@tangler carray.flx = share/lib/std/c/carray.flx
+@tangler cptr.flx = share/lib/std/c/cptr.flx
+@tangler address.flx = share/lib/std/scalar/address.flx
+@h1 C pointer
+@tangle cptr.flx
+
+//$ Felix and C pointers.
+//$ Felix pointer ptr[T] = &T.
+//$ C pointer cptr[T] = &T.
+//$ See also carray for incrementable pointers carray[T] = +T.
+open class Cptr 
+{
+  //$ Type of a Felix pointer.
+  //$ Always points to an object.
+  //$ Cannot be NULL.
+  //$ Cannot be incremented.
+  typedef ptr[T] = &T;
+
+  //$ Dereference a Felx pointer.
+  lvalue fun deref[T]: &T -> T = "*$1";
+
+  //$ Type of a C pointer.
+  //$ Either pointes to an object or is NULL.
+  //$ Cannot be incremented.
+  union cptr[T] = | nullptr | Ptr of &T;
+
+  //$ Demote a Felix pointer to a C pointer. Safe.
+  ctor[T] cptr[T]: &T = "$1";
+
+  //$ Promote a C pointer to a Felix pointer.
+  //$ Conversion is checked.
+  //$ Aborts with match failure if NULL.
+  ctor[T] ptr[T]( px:cptr[T]) => let Ptr  p = px in p; // match failure if null
+
+  //$ Checked dereference of C pointer.
+  fun deref[T] (px:cptr[T])=> *(px.ptr);
+
+  //$ Test if a C pointer is NULL.
+  fun is_nullptr[T] (px:cptr[T])=> match px with | #nullptr => true | _ => false endmatch;
+  
+  instance[T] Eq[cptr[T]] {
+    //$ Equality of C pointers.
+    fun == : cptr[T] * cptr[T] -> bool = "$1==$2";
+  }
+  instance[T] Tord[cptr[T]] {
+    //$ Total ordering of C pointer.
+    //$ NULL is the least element.
+    fun < : cptr[T] * cptr[T] -> bool = "$1<$2";
+  }
+}
+
+open[T] Eq[cptr[T]];
+open[T] Tord[cptr[T]];
+
+//$ Special notation @T for  type of a C pointer.
+typedef fun n"@" (T:TYPE) : TYPE => cptr[T]; 
+
+@h1 C Arrays
+@tangle carray.flx
+
+//$ A carray[T] = +T is an incrementable, non-NULL, pointer.
+open class Carray
+{
+  requires Cxx_headers::cstdlib;
+  open C_hack;
+
+  //$ The carray type.
+  type carray[T] = new &T;
+
+  //$ Define prefix + notation.
+  typedef fun prefix_plus(T:TYPE) : TYPE => carray[T]; 
+
+  //$ Unsafe conversion of Felix pointer to carray.
+  fun prefix_plus [T]:&T -> carray[T] = "$1"; // unsafe
+
+  //$ Demote carray to Felix pointer (safe unless off the end).
+  fun neg [T]: carray[T] -> &T = "$1"; // safe (unless we allow +T to be NULL later ..)
+
+  //$ a &. i returns pointer to i'th component of an array.
+  fun n"&." [T]: carray[T] * !ints -> &T = "$1+$2"; // safe (unless we allow +T to be NULL later ..)
+
+  //$ Unsafe conversion of Felix pointer to carray.
+  ctor[T] carray[T] : &T = "$1";
+
+  //$ Get a carray from a Felix array object.
+  ctor[T,N] carray[T]: &array[T,N] = "($1)->data";
+
+  //$ Allocate a C array on the C heap (malloc).
+  //$ Unsafe: Not tracked by GC.
+  fun array_alloc[T]: !ints -> carray[T] = '(?1*)::std::malloc(sizeof(?1)*$1)';
+
+  //$ Allocate a C array on the C heap with 0 fill (cmalloc).
+  //$ Unsafe: Not tracked by GC.
+  fun array_calloc[T]: !ints -> carray[T] = '(?1*)::std::calloc(sizeof(?1),$1)';
+
+  //$ Free a C array (free).
+  //$ Must point to C heap allocated storage. Unsafe.
+  proc free[T]: carray[T] = "::std::free($1);";
+
+  //$ Lvalue reference to element by index position. Unsafe.
+  fun subscript[T]: carray[T] * !ints -> T = '$1[$2]';
+
+  //$ Lvalue reference to element by pointer.
+  lvalue fun deref[T]: carray[T] -> T = '*$1';
+
+  //$ Functional get by index.
+  fun get[T]: carray[T] * !ints -> T = '$1[$2]';
+
+  //$ Get by index using application.
+  //$ i x = x . i = get (x,i)
+  fun apply [T,I in ints] (i:I, x:carray[T]) => get (x,i.size);
+
+  //$ Store value in array at index position.
+  proc set[T] : carray[T] * !ints * T = "$1[$2]=$3;";
+
+  //$ Get carray of an array.
+  fun stl_begin[T,N]: carray[array[T,N]] -> carray[T] = "(?1*)&($1->data)";
+
+  //$ Advance carray to next element.
+  fun + [T]: carray[T] * !ints -> carray[T]= '$1+$2';
+
+  //$ Backup carray to previous element.
+  fun - [T]: carray[T] * !ints -> carray[T] = '$1-$2';
+
+  //$ Calculate the offset in elements between
+  //$ two overlapping carrays.
+  fun - [T]: carray[T] * carray[T]-> ptrdiff = '$1-$2';
+
+  //$ Mutable pre-increment ++p.
+  proc pre_incr[T]: &carray[T] = '++*$1;';
+
+  //$ Mutable post-increment p++.
+  proc post_incr[T]: &carray[T] = '(*$1)++;';
+
+  //$ Mutable pre-decarement --p.
+  proc pre_decr[T]: &carray[T] = '--*$1;';
+
+  //$ Mutable post-decarement p--.
+  proc post_decr[T]: &carray[T] = '(*$1)--;';
+
+  //$ Mutable advance by offset amount.
+  proc += [T]: &carray[T] * !ints = '*$1+=$2;';
+
+  //$ Mutable backup by offset amount.
+  proc -= [T]: &carray[T] * !ints = '*$1-=$2;';
+
+  //$ Pointer equality.
+  instance[T] Eq[carray[T]] {
+    fun == : carray[T] * carray[T] -> bool = '$1==$2';
+    fun != : carray[T] * carray[T] -> bool = '$1!=$2';
+  }
+
+  //$ Pointer total ordering.
+  instance[T] Tord[carray[T]] {
+    fun < : carray[T] * carray[T] -> bool = '$1<$2';
+    fun <= : carray[T] * carray[T] -> bool = '$1<=$2';
+    fun > : carray[T] * carray[T] -> bool = '$1>$2';
+    fun >= : carray[T] * carray[T] -> bool = '$1>=$2';
+  }
+
+  //$ Convert C array to Felix array.
+  fun array_of[T,N]: carray[T] -> &array[T,N] = "*(#0*)(void*)$1";
+
+  //$ Fast byte-wise copy from address to address.
+  //$ WHY IS THIS HERE?
+  proc memcpy: address * address * size =
+    "{if($1 && $2 && $3)::std::memcpy($1,$2,$3);}"
+    requires Cxx_headers::cstring
+  ;
+  //$ Fast bytewise comparison from address to address.
+  //$ WHY IS THIS HERE?
+  fun memcmp: address * address * size -> int = "::std::memcmp($1,$2,$3)"
+    requires Cxx_headers::cstring
+  ;
+
+  // Unsafe C string functions for NTBS.
+  // move to where they should be (if it isn't here .. :)
+
+  //$ C strcpy.
+  proc strcpy: carray[char] * carray[char] = "(void)::std::strcpy($1,$2);" requires Cxx_headers::cstring;
+
+  //$ C strncpy.
+  proc strncpy: carray[char] * carray[char] * !ints = "(void)::std::strncpy($1,$2,$3);" requires Cxx_headers::cstring;
+
+  //$ C strlen: NTBS length.
+  fun strlen: carray[char] ->size = "::std::strlen($1)" requires Cxx_headers::cstring;
+
+  //$ Traditional NTBS strdup.
+  gen strdup(s:carray[char]) = {
+    val n = strlen s;
+    var out=array_alloc[char] (n+1uz);
+    strcpy(out,s);
+    return out;
+  }
+}
+
+open[T] Eq[carray[T]];
+open[T] Tord[carray[T]];
+
+@h1 Raw Address
+@tangle address.flx
+
+//$ Core operations on addresses.
+open class Address {
+  //$ Construct from Felix object pointer.
+  ctor[T] address: &T = "(void*)$1";
+
+  //$ Construct from possibly NULL pointer.
+  ctor[T] address: cptr[T] = "(void*)$1"; //@
+
+  //$ Construct from possibly array element pointer.
+  ctor[T] address: +T = "(void*)$1";
+
+  //$ Construct from C function
+  ctor[D,C] address: D --> C = "(void*)$1";
+
+
+  //$ Check is an address is NULL.
+  fun isNULL: address -> bool = "(0==$1)";
+
+  //$ Define NULL address.
+  const NULL : address = "NULL";
+
+  instance Eq[address] {
+    fun == : address * address -> bool = "$1==$2";
+  }
+  instance Tord[address] {
+    fun < : address * address -> bool = "::std::less<void*>()($1,$2)";
+  }
+  instance[T in addressing] Str[T] {
+    fun str (t:T) : string => vsprintf (c"%p", t);
+  }
+
+  fun + : address * !ints -> address = "(void*)((char*)$1+$2)";
+  fun - : address * !ints -> address = "(void*)((char*)$1-$2)";
+  fun - : address * address -> ptrdiff = "(char*)$1-(char*)$2";
+}
+
+// Do we want this to be hex?
+//instance[T in addressing] Repr[T] {
+//  fun repr (t:T) : string => vsprintf (c"%p" t);
+//}
+
+open Eq[byte];
+
+open Tord[address];
+

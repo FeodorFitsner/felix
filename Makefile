@@ -68,7 +68,7 @@ help:
 	#   FBUILD_PARAMS: parameters to fbuild, default none
 	#     fbuild/fbuild-light --help for options
 
-build: packages user-build slow-flxg rebuild
+build: syntax extract user-build slow-flxg rebuild
 
 dev-build: fbuild gendoc
 
@@ -196,6 +196,7 @@ install-website:
 #
 syntax:
 	rm -f ${BUILDROOT}/share/lib/grammar/*
+	mkdir -p ${BUILDROOT}/share/lib/grammar
 	cp src/lib/grammar/* ${BUILDROOT}/share/lib/grammar
 
 #
@@ -296,7 +297,9 @@ noisy-packages:
 
 
 grammar:
-	-${BUILDROOT}/host/bin/flx src/tools/flx_find_grammar_files ${BUILDROOT}
+	src/tools/flx_find_grammar_files.py ${BUILDROOT}
+
+extract: packages grammar
 
 #
 slow-flxg:
@@ -313,7 +316,7 @@ flxg:
 	build/release/host/bin/flx_build_flxg
 	cp tmp-dir/flxg build/release/host/bin
 
-copy: packages
+copy: extract 
 	# =========================================================
 	# copying ./src to build/release/share/src
 	# =========================================================
