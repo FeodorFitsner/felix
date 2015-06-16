@@ -1,5 +1,10 @@
 @title The Felix Standard Library
 @h1 Building the basics
+<dt><a href=libstruct.fdoc>Library Structure Map</a></dt>
+<dd>Directory Layout of the extracted Standard library.
+With some uncategorise files thrown in.</dd>
+</dl>
+
 <dt><a href=basic_algebraic_structures.fdoc>Basic Algebraic Structure</a></dt>
 <dd>Now we have to define some basic algebraic structures...</dd>
 </dl>
@@ -13,6 +18,14 @@
 
 <dt><a href=core_scalar_types.fdoc>Core Scalar Types</a></dt>
 <dd>So we lift some basic types from C.<dd>
+</dl>
+
+<dt><a href=core_type_constructors.fdoc>Core Type Constructors</a></dt>
+<dd>Some core data types and library support for compiler instrinsics.<dd>
+</dl>
+
+<dt><a href=pointers.fdoc>Pointers</a></dt>
+<dd>Basic pointers.<dd>
 </dl>
 
 <dt><a href=control.fdoc>Control Flow primitives</a></dt>
@@ -81,6 +94,10 @@ synchronisation devices.</dd>
 </dl>
 
 <hr>
+
+<dt><a href=debug.fdoc>Debugging.</a></dt>
+<dd>Some debugging aids.</dd>
+</dl>
 
 <dt><a href=gc.fdoc>Garbage Collector</a></dt>
 <dd>Access to Garbage Collector</dd>
