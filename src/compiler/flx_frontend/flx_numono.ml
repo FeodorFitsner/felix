@@ -287,8 +287,8 @@ let flat_poly_fixup_exe syms bsym_table polyinst parent_ts mt exe =
     let j,ts = polyinst i parent_ts in
     (*
       if i <> j then
-        print_endline ("[svc] Remapped deviant variable to " ^ si i);
-     *)
+        print_endline ("[svc] Remapped deviant variable to " ^ si j);
+    *)
     bexe_svc (sr,j)
 
   | x -> x
@@ -461,7 +461,15 @@ let find_felix_inst syms bsym_table processed to_process nubids i ts : int =
     k
   | Some (k) -> k
 
-let mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst ts bsym =
+let notunitassign exe = match exe with
+  | BEXE_assign (_,_,(_,BTYP_tuple [])) 
+  | BEXE_init (_,_, (_,BTYP_tuple []))
+    -> false
+  | _ -> true
+
+let strip_unit_assigns exes = List.filter notunitassign exes 
+
+let mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst ts bsym i j =
 (*
   print_endline ("[mono_bbdcl] " ^ Flx_bsym.id bsym);
   print_endline ("ts=[" ^ catmap "," (sbt bsym_table) ts ^ "]");
@@ -504,6 +512,10 @@ let mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst 
         ps
         with Not_found -> print_endline ("Not Found FIXING parameters"); assert false
       in
+      (* fudge unit parameters *)
+      let ps = List.map (fun {pkind=pk; pid=s; pindex=i; ptyp=t} ->
+        {pkind=pk;pid=s;pindex=(match t with BTYP_tuple [] -> 0 | _ -> i);ptyp=t}) ps 
+      in
       let traint =
         match traint with
         | None -> None
@@ -513,6 +525,8 @@ let mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst 
         try fixup_exes syms bsym_table vars virtualinst polyinst ts exes 
         with Not_found -> assert false
       in
+      let exes = strip_unit_assigns exes in
+      let exes = List.map (fun exe -> Flx_bexe.map ~f_bexpr:Flx_bexpr.reduce exe) exes in
       let props = List.filter (fun p -> p <> `Virtual) props in
       Some (bbdcl_fun (props,[],(ps,traint),ret,exes))
     with Not_found ->
@@ -523,7 +537,13 @@ let mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst 
     assert (List.length vs = List.length ts);
     let vars = List.map2 (fun (s,i) t -> i,t) vs ts in
     let t = mt vars t in
-    Some (bbdcl_val ([],t,kind))
+    (* eliminate unit variables *)
+    begin match t with
+    | BTYP_tuple [] -> 
+      (* print_endline ("Elim unit var " ^ Flx_bsym.id bsym ^ " old index " ^ si i ^ " new index would be " ^ si j); i*)
+      None
+    | _ -> Some (bbdcl_val ([],t,kind))
+    end
 
   (* we have tp replace types in interfaces like Vector[int]
     with monomorphic versions if any .. even if we don't
@@ -709,7 +729,7 @@ print_endline ("Parent ts = " ^ catmap "," (sbt bsym_table) pts);
         end
     in
     let maybebbdcl = 
-      try mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst ts sym 
+      try mono_bbdcl syms bsym_table processed to_process nubids virtualinst polyinst ts sym i j 
       with Not_found -> assert false 
     in
     begin match maybebbdcl with

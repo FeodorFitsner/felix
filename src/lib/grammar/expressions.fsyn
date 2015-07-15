@@ -40,6 +40,13 @@ syntax expressions {
     satomic_pri
   ;
 
+  requires 
+    setexpr, cmpexpr, pordcmpexpr, tordcmpexpr, 
+    addexpr, mulexpr, divexpr,
+    bitexpr,
+    spipeexpr, boolexpr, stringexpr, listexpr, tupleexpr
+  ;
+
   sexpr := x[let_pri] =># "_1";
   stypeexpr:= x[sor_condition_pri] =># "_1";
 
@@ -113,49 +120,11 @@ syntax expressions {
   //$ Low precedence left associative reverse application.
   x[spipe_apply_pri] := x[spipe_apply_pri] "|>" x[stuple_pri] =># "`(ast_apply ,_sr (,_3 ,_1))";
 
-  //$ Tuple formation by cons: right associative.
-  x[stuple_cons_pri] := x[>stuple_cons_pri] ",," x[stuple_cons_pri] =># "`(ast_tuple_cons ,_sr ,_1 ,_3)";
-
-  //$ Tuple formation non-associative.
-  x[stuple_pri] := x[>stuple_pri] ( "," x[>stuple_pri])+ =># "(chain 'ast_tuple _1 _2)";
-
-  //$ Logical implication.
-  x[simplies_condition_pri] := x[>simplies_condition_pri] "implies" x[>simplies_condition_pri] =># "(Infix)";
-
-  //$ Logical disjunction (or).
-  x[sor_condition_pri] := x[>sor_condition_pri] ( "or" x[>sor_condition_pri])+ =># "(chain 'ast_orlist _1 _2)" note "lor";
-
-  //$ Logical conjunction (and).
-  x[sand_condition_pri] := x[>sand_condition_pri] ( "and" x[>sand_condition_pri])+ =># "(chain 'ast_andlist _1 _2)" note "land";
-
-  //$ Logical negation (not).
-  x[snot_condition_pri] := "not" x[snot_condition_pri]  =># "`(ast_not ,_sr ,_2)";
-
-  cmp := "<" =># "(nos _1)"; 
-  cmp := "<=" =># "(nos _1)"; 
-  cmp := "==" =># "(nos _1)"; 
-  cmp := "!=" =># "(nos _1)"; 
-  cmp := ">=" =># "(nos _1)"; 
-  cmp := ">" =># "(nos _1)"; 
-  cmp := "in" =># '(nos "\\in")'; 
-  cmp := "\in" =># "(nos _1)"; 
-  x[scomparison_pri]:= x[>scomparison_pri] cmp x[>scomparison_pri] =># "`(ast_apply ,_sr (,_2 (,_1 ,_3)))";
-  x[scomparison_pri]:= x[>scomparison_pri] "not" cmp x[>scomparison_pri] =># "`(ast_not ,_sr (ast_apply ,_sr (,_3 (,_1 ,_4))))";
-
   //$ Named temporary value.
   x[sas_expr_pri] := x[sas_expr_pri] "as" sname =># "`(ast_as ,_sr (,_1 ,_3))";
 
   //$ Named variable.
   x[sas_expr_pri] := x[sas_expr_pri] "as" "var" sname =># "`(ast_as_var ,_sr (,_1 ,_4))";
-
-  //$ Left assoc, for schannel pipes.
-  x[ssetunion_pri] := x[ssetunion_pri] "|->" x[>ssetunion_pri] =># "(infix 'pipe)"; 
-
-  //$ Right assoc, for schannel pipes transformers
-  x[ssetunion_pri] := x[>ssetunion_pri] "=>" x[ssetunion_pri] =># "(infix 'trans_type)"; 
-
-  //$ Non associative, streaming data structure into transducer.
-  x[ssetunion_pri] := x[>ssetunion_pri] ">->" x[>ssetunion_pri] =># "(infix 'xpipe)"; 
 
 
   x[sarrow_pri] := x[>sarrow_pri] ".." x[>sarrow_pri] =># '''
@@ -167,10 +136,6 @@ syntax expressions {
   ''';
 
   // right arrows: RIGHT ASSOCIATIVE!
-
-  //$ List cons, right associative.
-  x[sarrow_pri] := x[>sarrow_pri] "!" x[sarrow_pri] =># '''`(ast_apply ,_sr (,(nos "Cons") (,_1 ,_3)))''';
-
   //$ Function type, right associative.
   x[sarrow_pri] := x[>sarrow_pri] "->" x[sarrow_pri] =># "`(ast_arrow (,_1 ,_3))";
 
@@ -189,38 +154,8 @@ syntax expressions {
   //$ Variant value.
   x[scase_literal_pri] := "case" sname "of" x[ssum_pri] =># "`(ast_variant (,_2 ,_4))";
 
-  //$ Bitwise or, left associative.
-  x[sbor_pri] := x[sbor_pri] "\|" x[>sbor_pri] =># "(Infix)";
-
-  //$ Bitwise xor, left associative.
-  x[sbxor_pri] := x[sbxor_pri] "\^" x[>sbxor_pri] =># "(Infix)";
-
-  //$ Bitwise exclusive and, left associative.
-  x[sband_pri] := x[sband_pri] "\&" x[>sband_pri] =># "(Infix)";
-
-  //$ Bitwise left shift, left associative.
-  x[sshift_pri] := x[sshift_pri] "<<" x[>sshift_pri] =># "(Infix)";
-
-  //$ Bitwise right shift, left associative.
-  x[sshift_pri] := x[sshift_pri] ">>" x[>sshift_pri] =># "(Infix)";
-
-  //$ Addition: left non-associative.
-  x[ssum_pri] := x[>ssum_pri] ("+" x[>ssum_pri])+ =># "(chain 'ast_sum _1 _2)" note "add";
-
-  //$ Subtraction: left associative.
-  x[ssubtraction_pri] := x[ssubtraction_pri] "-" x[sproduct_pri] =># "(Infix)";
-  
-  //$ multiplication: non-associative.
-  x[sproduct_pri] := x[>sproduct_pri] ("*" x[>sproduct_pri])+ =># "(chain 'ast_product _1 _2)" note "mul";
-
   //$ multiplication: right associative
   x[sproduct_pri] := x[>sproduct_pri] "\otimes" x[sproduct_pri] =># "(Infix)";
-
-  //$ division: left associative.
-  x[s_term_pri] := x[s_term_pri] "/" x[>s_term_pri] =># "(Infix)";
-
-  //$ remainder: left associative.
-  x[s_term_pri] := x[s_term_pri] "%" x[>s_term_pri] =># "(Infix)";
 
 //------------------------------------------------------------------------
   //$ Prefix exclaim.
@@ -276,20 +211,6 @@ syntax expressions {
   x[scoercion_pri] := ssuffixed_name =># "_1";
 
 //------------------------------------------------------------------------
-  // indexes and slices
-
-  //$ String subscript.
-  x[sfactor_pri] := x[sfactor_pri] "." "[" sexpr "]" =># "`(ast_apply ,_sr (,(noi 'subscript) (,_1 ,_4)))";
-
-  //$ String substring.
-  x[sfactor_pri] := x[sfactor_pri] "." "[" sexpr "to" sexpr "]" =># "`(ast_apply ,_sr (,(noi 'substring) (,_1 ,_4 ,_6)))";
-
-  //$ String substring, to end of string.
-  x[sfactor_pri] := x[sfactor_pri] "." "[" sexpr "to" "]" =># "`(ast_apply ,_sr (,(noi 'copyfrom) (,_1 ,_4)))";
-
-  //$ String substring, from start of string.
-  x[sfactor_pri] := x[sfactor_pri] "." "[" "to" sexpr "]" =># "`(ast_apply ,_sr (,(noi 'copyto) (,_1 ,_5)))";
-
   //$ Reverse application.
   x[sfactor_pri] := x[sfactor_pri] "." x[>sfactor_pri] =># "`(ast_apply ,_sr (,_3 ,_1))";
 
@@ -388,12 +309,6 @@ syntax expressions {
   //$ Ellipsis (for binding C varags functions).
   satom := "..." =># "`(ast_ellipsis ,_sr)";
 
-  //$ Boolean false.
-  satom := "false" =># "'(ast_typed_case  0 2)";
-
-  //$ Boolean true.
-  satom := "true" =># "'(ast_typed_case  1 2)";
-
   //$ Callback expression.
   satom := "callback" "[" sexpr "]" =># "`(ast_callback ,_sr ,_3)";
 
@@ -467,26 +382,6 @@ syntax expressions {
   satom := "{" setform  "}" =># "_2";
   satom := "\{" setform  "\}" =># "_2";
 
-  //$ Conditional expression.
-  satom := sconditional "endif" =># "_1";
-
-  //$ Conditional expression (prefix).
-  sconditional := "if" sexpr "then" sexpr selse_part =>#
-      "`(ast_cond ,_sr (,_2 ,_4 ,_5))";
-
-      selif := "elif" sexpr "then" sexpr =># "`(,_2 ,_4)";
-
-      selifs := selif =># "`(,_1)";
-      selifs := selifs selif =># "(cons _2 _1)";
-
-      selse_part:= "else" sexpr =># "_2";
-      selse_part:= selifs "else" sexpr =>#
-          """
-            (let ((f (lambda (result condthn)
-              (let ((cond (first condthn)) (thn (second condthn)))
-                `(ast_cond ,_sr (,cond ,thn ,result))))))
-            (fold_left f _3 _1))
-          """;
 
 }
 

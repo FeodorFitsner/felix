@@ -2,98 +2,18 @@
 @tangler option.flx      = share/lib/std/datatype/option.flx
 @tangler unitsum.flx     = share/lib/std/datatype/unitsum.flx
 @tangler tuple.flx       = share/lib/std/datatype/tuple.flx
+@tangler tupleexpr.fsyn  = share/lib/std/datatype/tupleexpr.fsyn
 @tangler slice.flx       = share/lib/std/datatype/slice.flx
-@tangler typing.flx      = share/lib/std/typing.flx
-@tangler flx_tclass.flx  = share/lib/std/flx_tclass.flx
-@tangler categ.flx       = share/lib/std/categ.flx
+@tangler typing.flx      = share/lib/std/datatype/typing.flx
+@tangler special.flx     = share/lib/std/datatype/special.flx
+@tangler functional.flx  = share/lib/std/datatype/functional.flx
 
 @h1 Core Type Classes
-@tangle flx_tclass.flx
+@tangle special.flx
 
 // Core types and type classes
 
-typedef void = 0;
-typedef unit = 1;
-typedef bool = 2;
 typedef any = any;
-
-// -----------------------------------------------------------------------------
-
-class IStream[f,t] {
-  virtual gen read: f -> t;
-}
-
-class OStream[f,t] {
-  virtual proc write: f * t;
-}
-
-class IOStream[f,t] {
-  inherit IStream[f,t];
-  inherit OStream[f,t];
-}
-
-// -----------------------------------------------------------------------------
-
-class IFile[f,t] {
-  inherit IStream [f,opt[t]];
-}
-
-class OFile[f,t] {
-  inherit OStream[f,t];
-  virtual proc close: f; // invalidates write operation
-}
-
-// -----------------------------------------------------------------------------
-
-class IBuffer [f] {
-  virtual gen read: f -> address * int -> int * bool;
-}
-
-class OBuffer [f] {
-  virtual gen write : f -> address * int -> int * bool;
-}
-
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-
-class Monad [M: TYPE->TYPE] {
-  virtual fun bind[a,b]: M a * (a -> M b) -> M b;
-  virtual fun ret[a]: a -> M a;
-}
-
-// -----------------------------------------------------------------------------
-
-class Str [T] {
-  virtual fun str: T -> string;
-}
-
-class Repr [T with Str[T]] {
-  virtual fun repr (t:T) : string => str t;
-}
-
-class Show [T] {
-  inherit Str[T];
-  inherit Repr[T];
-}
-
-// -----------------------------------------------------------------------------
-
-instance Str[void] {
-  fun str (x:void) => "void";
-}
-open Show[void];
-
-// -----------------------------------------------------------------------------
-
-instance Str[unit] {
-  fun str (x:unit) => "()";
-}
-open Show[unit];
-
-instance Eq[unit] {
-  fun == (x:unit, y:unit) => true;
-}
-open Eq[unit];
 
 @h1 Type Functors
 @tangle typing.flx
@@ -152,7 +72,6 @@ open class Typing
     | _ => 0
     endmatch
   ;
-
 
   const memcount[t] : size = "#memcount";
   const arrayindexcount[t] : size = "#arrayindexcount";
@@ -303,7 +222,6 @@ gen slice_range_excl[T with Integer[T]] (first:T) (limit:T) () = {
   return None[T]; 
 }
 
-
 // Note: guarrantees no overflow if first + count - 1
 // is in range of the type
 // Terminates after count values emitted
@@ -355,6 +273,27 @@ fun cal_slice (n:int, var b:int, var e:int) = {
 Treated as finite cyclic groups.
 @tangle unitsum.flx
 
+// -----------------------------------------------------------------------------
+typedef void = 0;
+
+instance Str[void] {
+  fun str (x:void) => "void";
+}
+open Show[void];
+
+typedef unit = 1;
+
+instance Str[unit] {
+  fun str (x:unit) => "()";
+}
+open Show[unit];
+
+instance Eq[unit] {
+  fun == (x:unit, y:unit) => true;
+}
+open Eq[unit];
+
+// -----------------------------------------------------------------------------
 
 typedef unitsums = typesetof (3,4,5,6,7,8,9,10,11,12,13,14,15,16);
 
@@ -416,11 +355,11 @@ open Str[14];
 open Str[15];
 open Str[16];
 
-@h1 Category Theoretic
-@tangle categ.flx
+@h1 Category Theoretic Functional Operations
+@tangle functional.flx
 
 //$ Categorical Operators
-open class Categ 
+open class Functional
 {
   // note: in Felix, products are uniquely decomposable, but arrows
   // are not. So we cannot overload based on arrow factorisation.
@@ -622,6 +561,18 @@ open class parallel_tuple_comp
      f5:u5->r5
     ) : u1 * u2 * u3 * u4 * u5 -> r1 * r2 * r3 * r4 * r5 => 
     fun (x1:u1,x2:u2,x3:u3,x4:u4,x5:u5) => f1 x1, f2 x2, f3 x3, f4 x4, f5 x5;
+
+}
+
+@h1 Tuple Constructor Syntax
+@tangle tupleexpr.fsyn
+syntax tupleexpr
+{
+  //$ Tuple formation by cons: right associative.
+  x[stuple_cons_pri] := x[>stuple_cons_pri] ",," x[stuple_cons_pri] =># "`(ast_tuple_cons ,_sr ,_1 ,_3)";
+
+  //$ Tuple formation non-associative.
+  x[stuple_pri] := x[>stuple_pri] ( "," x[>stuple_pri])+ =># "(chain 'ast_tuple _1 _2)";
 
 }
 

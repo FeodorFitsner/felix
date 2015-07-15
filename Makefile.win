@@ -23,30 +23,7 @@ FBUILDROOT ?= build
 BUILDROOT ?= ${FBUILDROOT}/release
 DEBUGBUILDROOT ?= ${FBUILDROOT}/debug
 PYTHON ?= python3
-# If running as root skip sudo
-ifeq ($(USER),root)
-SUDO=
-else
-SUDO=sudo
-endif
-
-# Choose one: Linux or OSX
-# LPATH = LD_LIBRARY_PATH or, LPATH = DYLD_LIBRARY_PATH
-platform := $(shell uname -s)
-ifeq ($(platform), Linux)
-	LPATH = LD_LIBRARY_PATH
-else
-	ifeq ($(platform), Darwin)
-		LPATH = DYLD_LIBRARY_PATH
-	else  
-		ifeq ($(platform), CYGWIN_NT-6.1)
-			LPATH = LD_LIBRARY_PATH
-		endif
-	endif
-endif
-ifndef LPATH
-	$(error Unrecognized kernel name -- Unable to detect setting for LPATH)
-endif
+LPATH = $${PATH}
 
 help:
 	# Makefile help
