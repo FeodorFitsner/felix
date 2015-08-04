@@ -440,18 +440,18 @@ class Builder(fbuild.builders.c.Builder):
                 flags=list(chain(('-MMD', '-MF', dep), flags)),
                 **kwargs)
 
-            with open(dep, 'rb') as f:
+            with open(dep, 'r') as f:
                 # Parse the output and return the module dependencies.
-                stdout = f.read().replace(b'\\\n', b'')
+                stdout = f.read().replace('\\\n', '')
 
         # Parse the output and return the module dependencies.
-        m = re.match(b'\s*\S+:(?: (.*))?$', stdout)
+        m = re.match('\s*\S+:(?: (.*))?$', stdout)
         if not m:
             raise fbuild.ExecutionError('unable to understand %r' % stdout)
 
         s = m.group(1)
         if s is not None:
-            deps = s.decode().split()
+            deps = s.split()
             self.ctx.db.add_external_dependencies_to_call(srcs=deps)
 
         return obj
