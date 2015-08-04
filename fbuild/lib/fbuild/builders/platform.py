@@ -1,5 +1,6 @@
 import platform
 import os
+from collections import OrderedDict
 
 import fbuild
 import fbuild.builders
@@ -22,34 +23,34 @@ class UnknownPlatform(fbuild.ConfigFailed):
 # map of architecture names to match against
 # please keep most specific names above more general ones (matching occurs 
 # top down)
-archmap = {
-    'irix64':    {'posix', 'irix', 'irix64'},
-    'irix':      {'posix', 'irix'},
-    'unix':      {'posix'},
-    'posix':     {'posix'},
-    'gnu/linux': {'posix', 'linux'},
-    'linux':     {'posix', 'linux'},
-    'solaris':   {'posix', 'solaris'},
-    'sunos':     {'posix', 'solaris', 'sunos'},
-    'nocygwin':  {'posix', 'cygwin', 'nocygwin'},
-    'cygwin':    {'posix', 'cygwin'},
-    'mingw':     {'posix', 'mingw'},
-    'windows':   {'windows', 'win32'},
-    'nt':        {'windows', 'win32', 'nt'},
-    'win32':     {'windows', 'win32'},
-    'win64':     {'windows', 'win64'},
-    'windows32': {'windows', 'win32'},
-    'windows64': {'windows', 'win64'},
-    'freebsd':   {'posix', 'bsd', 'freebsd'},
-    'netbsd':    {'posix', 'bsd', 'netbsd'},
-    'openbsd':   {'posix', 'bsd', 'openbsd'},
-    'darwin':    {'posix', 'bsd', 'darwin', 'macosx'},
-    'osx':       {'posix', 'bsd', 'darwin', 'macosx'},
+archmap = OrderedDict([
+    ('irix64',    {'posix', 'irix', 'irix64'}),
+    ('irix',      {'posix', 'irix'}),
+    ('unix',      {'posix'}),
+    ('posix',     {'posix'}),
+    ('gnu/linux', {'posix', 'linux'}),
+    ('linux',     {'posix', 'linux'}),
+    ('solaris',   {'posix', 'solaris'}),
+    ('sunos',     {'posix', 'solaris', 'sunos'}),
+    ('nocygwin',  {'posix', 'cygwin', 'nocygwin'}),
+    ('cygwin',    {'posix', 'cygwin'}),
+    ('mingw',     {'posix', 'mingw'}),
+    ('windows',   {'windows', 'win32'}),
+    ('nt',        {'windows', 'win32', 'nt'}),
+    ('win32',     {'windows', 'win32'}),
+    ('win64',     {'windows', 'win64'}),
+    ('windows32', {'windows', 'win32'}),
+    ('windows64', {'windows', 'win64'}),
+    ('freebsd',   {'posix', 'bsd', 'freebsd'}),
+    ('netbsd',    {'posix', 'bsd', 'netbsd'}),
+    ('openbsd',   {'posix', 'bsd', 'openbsd'}),
+    ('darwin',    {'posix', 'bsd', 'darwin', 'macosx'}),
+    ('osx',       {'posix', 'bsd', 'darwin', 'macosx'}),
 
-    'iphone-simulator': {'posix', 'bsd', 'darwin', 'iphone', 'simulator'},
-    'iphone-sim':       {'posix', 'bsd', 'darwin', 'iphone', 'simulator'},
-    'iphone':           {'posix', 'bsd', 'darwin', 'iphone'},
-}
+    ('iphone-simulator', {'posix', 'bsd', 'darwin', 'iphone', 'simulator'}),
+    ('iphone-sim',       {'posix', 'bsd', 'darwin', 'iphone', 'simulator'}),
+    ('iphone',           {'posix', 'bsd', 'darwin', 'iphone'}),
+])
 
 # ------------------------------------------------------------------------------
 
@@ -84,10 +85,11 @@ def guess_platform(ctx, arch=None):
                 arch = platform.system().lower()
             else:
                 arch = stdout.decode('utf-8').strip().lower()
+                if arch == 'windowsnt' or 'mingw' in arch: arch = 'windows'
 
     # now search for the general "kind" of platform
     for key in archmap.keys():
-        if key in arch:
+        if key.lower() in arch.lower():
             architecture = archmap[key]
             break
 
@@ -150,7 +152,7 @@ def shared_lib_prefix(ctx, platform=None):
 
 def shared_lib_suffix(ctx, platform=None):
     platform = platform if platform else guess_platform(ctx)
-    if 'windows' in platform or 'cygwin' in platform:
+    if 'windows' in platform:
         return '.dll'
     elif 'darwin' in platform:
         return '.dylib'
