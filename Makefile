@@ -109,6 +109,12 @@ tut-dir:
 	${BUILDROOT}/host/bin/flx_tangle --linenos --indir=src/web/tut --outdir=${BUILDROOT}/test/tut
 	for file in src/web/tut/*.fdoc; do ${BUILDROOT}/host/bin/flx_iscr $$file ${BUILDROOT}/test/tut; done
 
+extras:
+	for file in extras/*.fdoc; do python3 src/tools/flx_iscr.py $$file ${BUILDROOT}; done
+
+extras-check:
+	-${BUILDROOT}/host/bin/flx --felix=build.fpc --usage=prototype --expect --nonstop --indir=${BUILDROOT}/test/extras --regex='.*\.flx' ${BUILDROOT}/test
+ 
 regress-check: test-dir
 	# ============================================================
 	#
@@ -139,7 +145,7 @@ tutopt-check: tutopt-dir
 	-FLX_INSTALL_DIR=${BUILDROOT} ${BUILDROOT}/host/bin/flx --felix=build.fpc --usage=prototype --expect --input --nonstop --indir=${BUILDROOT}/test/tutopt --regex='.*\.flx' ${BUILDROOT}/test/tutopt
 
 
-test: regress-check tut-check tutopt-check
+test: regress-check tut-check tutopt-check extras-check
 
 #
 #
@@ -153,6 +159,8 @@ install:
 	${BUILDROOT}/host/bin/flx_cp ${BUILDROOT} '(VERSION)' ${INSTALLDIR}'/$${1}'
 	${BUILDROOT}/host/bin/flx_cp ${BUILDROOT}/host/bin '(flx)' ${EXECPREFIX}'/$${1}'
 	${BUILDROOT}/host/bin/flx_cp src/ '(.*\.(c|cxx|cpp|h|hpp|flx|flxh|fdoc|fsyn|fpc|ml|mli|html))' ${INSTALLDIR}'/share/src/$${1}'
+	${BUILDROOT}/host/bin/flx_cp speed/ '(.*)' ${INSTALLDIR}'/speed/$${1}'
+
 	rm -f ${INSTALLROOT}/felix-latest
 	ln -s felix-${VERSION} ${INSTALLROOT}/felix-latest
 
@@ -206,7 +214,7 @@ syntax:
 speed:
 	-rm -rf result.tmp
 	sh speed/perf.sh 2>>result.tmp
-	flx src/tools/flx_gengraph
+	build/release/host/bin/flx --felix=build.fpc src/tools/flx_gengraph
 
 #
 # Documentation
@@ -591,7 +599,7 @@ evtdemo:
 	# run
 	demos/embed/evtdemo
 
-.PHONY : build32 build64 build test32 test64 test
+.PHONY : build32 build64 build test32 test64 test extras 
 .PHONY : build32-debug build64-debug build-debug test32-debug test64-debug test-debug
 .PHONY : doc install websites-linux  release install-bin
 .PHONY : copy-doc gen-doc gendoc fbuild speed tarball

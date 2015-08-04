@@ -1,0 +1,182 @@
+@title Testing Extra Package.
+@tangler hello.flx = share/lib/hello.flx
+@tangler hello.hpp = share/src/hellolib/hello.hpp
+@tangler hello.cpp = share/src/hellolib/hello.cpp
+@tangler hello.fpc = host/config/hello.fpc
+@tangler build_hello.sh = $PWD/build_hello.sh
+@tangler hello_test.flx = test/hello_test.flx
+@tangler hello_setup.flx = $PWD/hello_setup.flx
+
+@h1 How to make a new package for Felix
+This is an experiment to show how to make
+a Felix package including C++ code.
+
+If you type 
+@pre
+make extras
+@
+this package will be installed as if it were part of
+the core Felix system.
+
+@h2 The binding.
+We'll do the binding first.
+
+@tangle hello.flx
+// A binding to the greeting library
+proc hello : 1 = "hello();" requires package "hello";
+@
+
+@h2 The C++ Library
+Here's the actual C++ code.
+@tangle hello.hpp
+void hello();
+
+@tangle hello.cpp
+#include "hello.hpp"
+#include <iostream>
+using namespace std;
+void hello() { 
+  cout << "Hello from C++ and Felix" << endl; 
+}
+
+@h2 Build and use instructions (Unix).
+Should work on Unix. Combines both usage and build
+instructions. See below for key.
+@tangle hello.fpc
+Name: hello
+Platform: Unix
+Description: Test Hello (Unix)
+provides_dlib: -lhello
+provides_slib: -lhello
+requires_slibs:
+requires_dlibs:
+includes: '"hello.hpp"'
+library: hello
+macros: BUILD_HELLO
+Requires: flx
+srcdir: src/hellolib
+headers: hello\.hpp
+build_includes:
+src: .*\.cpp
+@
+
+Identification: the @{Name}, @{Platform} and @{Description} fields
+are commentary with no semantic impact.
+
+Usage: The @{provides_dlib} field tells the linker switches 
+required to make a shared library available to a user linkage step.
+The @{provides_slib} has the switches for using a static archive.
+
+The @{requires_slibs} field specifies any static dependencies.
+When @{flx_pkgconfig} does a static link this is used to ensure
+a properly ordered transitive closure is presented to the linker,
+without duplications. The field is not required to compiler
+static objects or create static libraries, but it is required
+when linking an executable.
+
+The @{requires_dlibs} field also expresses dependencies,
+however the semantics are radically different. At link
+time the libraries are presented only to bind the direct dependencies
+into the libraries we're building. At load time the loader finds
+the transitive closure itself, automatically, and presenting
+indirect dependencies is a serious error because it subverts the
+loading of a correctly versioned library.
+
+Note carefully an ambiguity: static archives are usually used
+to hold a collection of object files compiled for static linkage.
+However they may ALSO contain object files compiled for dynamic
+linkage. This matters on some platforms including x86_64 where
+the calling protocols differ and code for dynamic linkage
+requires @{-fPIC} to specify position independent code.
+Static links can use that too, but there is a small cost
+in the calling protocol.
+
+The @{includes} field specifies headers a C++ client 
+will require to interface to the library with a @{#include}
+directive.
+
+Building: The @{srcdir} tells where the C++ sources are.
+The @{src} names all the files that have to be compiled, it's an
+RE2 regexp.  The @{headers} field specifies the public header files
+that need to be copied into the run time library directory
+whereas the @{build_includes} field specifies all the directories
+containing header files required to actually perform the build.
+
+The @{macros} field specifies a command line macro that
+must be set for building (but not using) the library.
+This is to force exporting of symbols on Windows, and can
+be used to control visibility on Linux too. We haven't
+bothered with it in our code (but should for pedagogical purposes!)
+
+@h2 Compilation program
+@tangle hello_setup.flx
+
+include "std/felix/flx_mklib";
+
+private fun / (x:string,y:string) => Filename::join(x,y);
+
+var build_dir = System::argv 1;
+if build_dir == "" do
+  println$ "[hello_setup.flx] ERROR: arg1 must specify a build directory";
+  System::exit (1);
+done
+
+var src_dir = build_dir/"share";
+var target_dir = build_dir/"host"/"lib"/"rtl";
+var pkg = "hello";
+var tmpdir = "tmp";
+var static_only = false;
+var debug = false;
+var pkgdir = build_dir / "host" / "config";
+println$ "Config dir " + pkgdir;
+
+var db = FlxPkgConfig::FlxPkgConfigQuery (list[string] pkgdir);
+var toolchain = db.getpkgfield1 ("toolchain", "toolchain");
+
+println$ "Toolchain " + toolchain;
+var toolchain_maker = 
+  Dynlink::load-plugin-func1 [toolchain_t,clang_config_t] 
+  (
+    dll-name=toolchain, 
+    setup-str="",
+    entry-point=toolchain
+  )
+;
+
+FlxLibBuild::make_lib
+(
+  db,
+  toolchain_maker,
+  src_dir,       
+  target_dir,   
+  pkg,            // name of the package to be built
+  tmpdir,         // a suitable temporary directory
+  static_only,    // if true skip building shared library
+  debug           // whether to output debug stuff from this tool
+) ();
+
+@h2 Build script
+Temporarily, I'm going to use bash!
+Later this should be Felix or something.
+The fpc file above actually contains the build instructions
+but we're ignoring it because build_flx_rtl is too monolithic
+at the moment.
+
+@tangle build_hello.sh
+echo "Building core package hello for unix platform"
+(BR="build/release" &&\
+$BR/host/bin/flx hello_setup.flx $BR &&\
+echo "Library binaries installed in $BR/host/lib/rtl" &&\
+$BR/host/bin/flx --felix=build.fpc $BR/test/hello_test.flx) ||\
+echo "hello: BUILD FAILED"; exit 1
+@
+
+@h2 A test program
+@tangle hello_test.flx
+// A test of the hello package
+include "hello";
+println$ "Trying hello";
+hello();
+println$ "Hello should have run";
+@
+

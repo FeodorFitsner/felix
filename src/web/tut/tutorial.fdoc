@@ -20,12 +20,7 @@ Core string handling.
 Regexps with Google RE2.
 @p
 <a href="polymorphism_index.fdoc">Polymorphism: </a>
-basic parametric polymorphism in Felix.
-
-@h2 Contract Programming Paradigm.
-<a href="typeclass_index.fdoc">Type Classes: </a>
-Using classes to represent concepts.
-@p
+Basic parametric polymorphism in Felix.
 
 @h2 Functional Programming Technology
 <a href="pattern_index.fdoc">Pattern Matching: </a>
@@ -91,6 +86,12 @@ How to embed Felix, particularly in foreign event loops.
 @h1 Advanced Topics
 Categorical type system: 
 <a href="garray_index.fdoc">Generalised Arrays.</a>
+
+The <a href="fix.fdoc">fixpoint combinator</a> for eager
+languages using open recursion.
+
+Some <a href="arithmetic.fdoc">parser combinators</a>
+by Shayne Fletcher.
 
 @h2 Appendices
 <a href="literals_index.fdoc">Scalar Types:  </a>

@@ -1,147 +1,56 @@
-@title Parser Combinators
-@h1 Stuff
+@title An interpreter of arithmetic expressions
+
+@h1 An interpreter of arithmetic expressions
+
+This is a tutorial implementing an interpreter of arithmetic
+expressions. No code generation tools are employed, the program is
+self-contained. Lexical analysis is performed using parser
+combinators, evaluation by the method of environments. An interactive
+program for testing the interpreter is also provided.
+
 @pre
-// /home/fletch/project/felix.git/build/release/host/bin/flx --force --echo --test=build/release src/web/tut/arithmetic.fdoc
-//
-//To understand segfaults you do this:
-//  (a) Run flx with --force and --echo
-//        This tells you the name of the C++ file in the cache
-//        Now edit the C++ file with your text editor to put printf()
-//        statements in various places.
-//
-//  (b) Run flx again with --nofelix option
-//        That stops the flxg compiler running so it doesn't clobber
-//        your edits to the C++ file.
-//
-//You can then put Felix prints between the steps, this prints debug
-//stuff to show progress AND it put the prints in the C++ so you can
-//more easily find where you're up to.
-
-//Some more notes:
-
-//Compare this code against the 'E_let' case in 'eval' which uses a
-//"short form syntax"
-//
-// let v = eval env e in #{ env <- (tag, v) ! (deref env); return v; } 
-//
-
-//Notice also 'deref' is used here since '*' is hidden by the syntax
-//definition in effect for 'zero_or_more'.
-//
-//
-//This can be addressed in the future using the approach taken
-//by regdefs (see
-//http://felix-lang.org/$/usr/local/lib/felix/felix-latest/share/lib/grammar/regexps.fsyn
-//which uses a postfix '*'.
-//
-//"If you use a DSSL you can do like regdefs but then you have to
-//"unquote" to get back to standard notation i.e. you introduce by pcomb
-//(expr) pcomb switches syntax then you need in that syntax felix (expr)
-//to switch back eg you can do pcomb ( a b c \ d* ) if you get my drift:
-//you have a parser combinator language, there's no interaction with any
-//Felix operators at all."
-
-//On 05/06/2015, at 8:07 AM, Shayne Fletcher wrote:
-//
-//>       fun str (tok : token_t) : string => ... ;
-//>       fun str (ast : ast_t) : string => ... ;
-//
-//You should override the virtual:
-//
-//instance Str[token_t] {
-//        fun str (tok : token_t) : string => ... ;
-//}
-//open Str[token_t];
-//
-//This allows you to, for example print a token.
-//
-//>
-//>        match parse "..." with
-//>          | Some l => println$ str (map str l); //here
-//>          | #None => println$ "Oh dear";
-//>        endmatch;
-//>
-//>     it seems the compiler can't work out which overload to choose
-//
-//Of course not. How can it? Here str is being passed as an argument
-//to map, so map can't overload without knowing the type of the function
-//you're passing. Use
-//
-//        map str of (token_t) l
-//
-//The syntax
-//
-//        str of type
-//
-//is how you provide a function set an argument type when you're not
-//providing an argument\value.
-//
-//>
-//> (2) I have a type like this:
-//>
-//>       union result[A, B] =  Ok of A | Error of B ;
-//>
-//>       union error_t =
-//>         | Syntax_error
-//>         | Unbound_variable of string
-//>         | Division_by_zero
-//>         ;
-//>
-//>      Assume a 'str' overload like so:
-//>
-//>       fun str (err : error_t) : string =>
-//>         match err with
-//>           | Unbound_variable s => "Unbound variable '" + s + "'"
-//>           | #Syntax_error => "Syntax error"
-//>           | #Division_by_zero => "Attempted division by zero"
-//>         endmatch
-//>       ;
-//>
-//>      What I want to do is write a general 'str' for 'result' e.g.
-//>
-//>       fun str[A, B with Str[A], Str[B]] (res:result[A, B]) : string =>
-//>         match res with
-//>           | Ok a => str a
-//>           | Error b => "Error : " + str b
-//>        endmatch;
-//>
-//>      2.1 Is the syntax correct (for the multiple type constraints)?
-//
-//Yes.
-//
-//>      2.2 Any attempt to use the definition above fails - the compiler does not want to accept that there is an overload 'fun str (err : error_t) : string' it can use in the second case of the 'match'. What am I missing?
-//
-//Your str is not an instance of the typeclass Str.
-//
-//--
-//john skaller
-//skaller@users.sourceforge.net
-//http://felix-lang.org
-//
-
-// --
+//URL : http://localhost/$/home/fletch/project/felix.git/src/web/tut/arithmetic.fdoc
+//To exectue : /home/fletch/project/felix.git/build/release/host/bin/flx  --test=build/release src/web/tut/arithmetic.fdoc
 @
+
+@h1 Basics
+
+Let tokens be of type @{A} and parse results be of type @{B}. Parsers
+work on lists of tokens; they consume part of the list and produce a
+result together with the list of tokens remaining or, indication of
+failure.
+
 @felix
 //Result of a parse
 union parsed[A, B] = 
   | Returns of B * list[A] 
   | Parse_failed
   ;
+@
 
-//struct singular_value_t {};
-//var singular_value = singular_value_t ();
+Parsers are functions.
 
-typedef singular_value_t = unit;
-var singular_value = ();
-
+@felix
 //Type of a parser
 typedef parser[A, B] = list[A] -> parsed[A, B];
+@
 
+For example, the @{empty} parser recognizes the empty string. It
+always returns a value and never consumes any tokens. The value it
+returns is @{v}, the first argument.
+
+@felix
 //Emtpy string parser
 fun empty[A, B] (v:B)(toks:list[A]):parsed[A, B] => 
   Returns (v, toks)
   ;
+@
 
+@{token} takes a predicate argument and returns a parser. The parser
+succeeds (or not) by testing the predicate on the head token of the
+token list.
+
+@felix
 //Given a predicate, produce a parser
 fun token[A, B](test:A->opt[B]):parser[A,B] =>
   fun (l:list[A]):parsed[A, B] => 
@@ -154,7 +63,12 @@ fun token[A, B](test:A->opt[B]):parser[A,B] =>
     | #Empty => Parse_failed[A, B]
     endmatch
   ;
+@
 
+@{char_} is a function that computes a parser to match a specific
+token.
+
+@felix
 //Parser of a specific token
 fun char_[A with Eq[A]] (ch:A):parser[A, A] =>
   token (
@@ -165,7 +79,12 @@ fun char_[A with Eq[A]] (ch:A):parser[A, A] =>
     endmatch
   )
   ;
+@
 
+The <em>disjunction</em> of two parsers @{p} and @{q} say, is the
+parser @{p} "or else" @{q}.
+
+@felix
 //Parser disjunction
 fun orelse[A, B] (p1:parser[A, B], p2:parser[A, B]):parser[A, B] =>
    fun (toks:list[A]):parsed[A, B] =>
@@ -174,7 +93,12 @@ fun orelse[A, B] (p1:parser[A, B], p2:parser[A, B]):parser[A, B] =>
         | res => res
       endmatch
   ;
+@
 
+The <em>conjunction</em> of two parsers @{p} and @{q} say, is the
+parser @{p} "and then" @{q}.
+
+@felix
 //Parser conjunction
 fun andalso[A, B, C] (p1:parser[A, B],p2:parser[A, C]):parser[A, (B * C)] =>
   fun (toks:list[A]) : parsed[A, (B * C)]=>
@@ -187,16 +111,27 @@ fun andalso[A, B, C] (p1:parser[A, B],p2:parser[A, C]):parser[A, (B * C)] =>
       | _ => Parse_failed[A, (B * C)]
     endmatch
   ;
+@
 
+The function @{gives} takes a parser @{p} and a function @{f}. It
+parses with @{p} and applies @{f} to the parse result. This provides a
+facility to transform simple parse results into more complicated
+abstract syntax trees.
+
+@felix
 //Transform the result of a parse
-fun gives[A, B, C] (p:parser[A, B], f:B ->C):parser[A, C] =>
+fun gives[A, B, C] (p:parser[A, B], f:B -> C):parser[A, C] =>
   fun (toks:list[A]):parsed[A, C] =>
     match p toks with
       | Returns (v, toks1) => Returns (f v, toks1)
       | _ => Parse_failed[A, C]
    endmatch
   ;
+@
 
+In this section, infix operator syntax is introduced.
+
+@felix
 //Infix operators
 syntax infix_c
 {
@@ -227,19 +162,46 @@ syntax infix_c
 }
 
 open syntax infix_c;
+@
+
+That is,
+<table align="center" border="1" style=width:100%>
+<tr><th>Infix</th><th>Prefix</th><th>meaning</th></tr>
+<tr><td>@{|~}</td><td>@{orelse}</td><td>@{p}"or else"@{q}</td></tr>
+<tr><td>@{&~}</td><td>@{andalso}</td><td>@{p}"and then"@{q}</td></tr>
+<tr><td>@{&gt;=~}</td><td>@{gives}</td><td>@{p}"gives"@{q}</td></tr>
+<tr><td>@{&gt;&gt;=~}</td><td>@{givento}</td><td>@{p}"given to"@{q}</td></tr>
+</table>
+
+The last one, "given to", has not been defined yet. It's for when
+parser is computed as a parse result and parsing resumes with that
+parser on the tokens remanining. In Felix there is no problem
+referring to a definition that follows later in the program.
+
+To implement the next combinator, we need to enlist the help of some
+well known utilities.
+
+@felix
 
 //These idioms comes up enough to be worth factoring them out
 fun fst[A, B] (p : A * B) : A => p.0 ;
 fun snd[A, B] (p : A * B) : B => p.1 ;
-fun prepend[T] (p : T * list[T]) : list[T] => Cons (p.0, p.1) ;
+@
 
+With these we can write the "Kleene 'star'" operator", @{*}.
+
+@felix
 //Kleene '*'
 fun zero_or_more[A, B] (p:parser[A, B]): parser[A, list[B]] =>
   fun (toks:list[A]) : parsed[A, list[B]] =>
-   ( (p &~ zero_or_more p >=~ prepend[B])
+   ( (p &~ zero_or_more p >=~ Cons[B])
    |~ (empty[A, list[B]] (list[B]())) ) toks
 ;
+@
 
+Syntax for @{*} in prefix position is provided for by the following.
+
+@felix
 syntax prefix_c 
 {
   //zero_or_more
@@ -247,7 +209,16 @@ syntax prefix_c
 }
 
 open syntax prefix_c;
+@
 
+@h1 Lexical analysis
+
+@h2 Alphanumeric
+
+This <em>is not</em> a parser, this is a function that tests a @{char}
+for membership in a list of ranges like @{['a'-'z']['A'-'Z']}.
+
+@felix
 //Check if a character is a member of one of the provided ranges
 fun char_range (c:char)(l:list[char * char]):bool =>
   match l with
@@ -256,7 +227,12 @@ fun char_range (c:char)(l:list[char * char]):bool =>
        (ord c1 <= ord c and ord c <= ord c2) or char_range c tl
   endmatch
   ;
+@
 
+The function @{letter} on the other hand, <em>is</em> a
+parser. Analysis succeeds for alphabetic characters.
+
+@felix
 //An element of the alphabet
 var letter : parser[char, char] =
   token (fun (c:char) => 
@@ -266,17 +242,41 @@ var letter : parser[char, char] =
             (char 'A', char 'Z'))) 
            then Some c else None[char])
   ;
+@
 
+This next function is a digit parser.
+
+@felix
 //Digit parser
 var digit : parser[char, char] = 
   token (fun (c:char) : opt[char] => if isdigit c then Some c else None[char])
   ;
+@
 
+The expression @{(digit &~ *digit)} computes a pair. The first element
+of the pair is the leading digit, the second element of the pair, a
+list of zero or more digits. We "give" that pair to the constructor
+@{Cons[char]}, which joins the pair into a single list with head the
+leading digit.
+
+@felix
 //Parser of a sequence of digit
 var digits : parser[char, list[char]] = 
-  (digit &~ *digit) >=~ prepend[char]
+  (digit &~ *digit) >=~ Cons[char]
   ;
+@
 
+Next up, floating point numbers. Here's the grammar.
+@pre
+  digit   := '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'
+  digits  := digit digit*
+  optsign := '-'|'+'|&epsilon;
+  optfrac := ('.' digit*)|&epsilon;
+  optexp  := (('e'|'E') optsign digits)|&epsilon;
+  number  := digits optfrac optexp
+@
+
+@felix
 // '-' | '+' | eps
 var optsign : parser[char, list[char]] =
   token (fun (c:char):opt[list[char]] =>
@@ -289,18 +289,47 @@ var optsign : parser[char, list[char]] =
 
 // '.' digit* | eps
 var optfrac : parser[char, list[char]] =
-  ( char_ (char '.') &~ *digit >=~ prepend[char])
+  ( char_ (char '.') &~ *digit >=~ Cons[char])
   |~ empty[char, list[char]] (list[char] ())
   ;
 
 //(('e'|'E') optsign digits)|eps
 var optexp : parser[char, list[char]] =
   (((((char_ (char 'e') |~ char_ (char 'E')) &~ optsign) 
-    >=~ prepend[char]) &~ digits) 
+    >=~ Cons[char]) &~ digits) 
     >=~ (fun (x:list[char], y:list[char]) : list[char] => x + y)) 
   |~ empty[char, list[char]] (list[char] ())
 ;
+@
 
+@h2 Tokens
+
+In readiness for parsing, some functions for switching representations
+between @{string} and @{list[char]}.
+
+@felix
+//Explode a string into a list of char
+fun explode (s:string):list[char] =
+{
+  val n:size = len s;
+  fun loop (acc:list[char]) (i:size) : list[char] =>
+    if (i == n) then rev acc
+    else loop (Cons (s.[i], acc)) (i + 1)
+  ;
+
+  return loop (list[char]()) 0uz;
+};
+
+//Implode a list of char to a string
+fun implode (xs:list[char]) =>
+  fold_left (fun (a:string) (b:char):string => a + b) "" xs
+  ;
+@
+
+At this point, it makes sense to introduce a type for the tokens that
+we will admit into our language of arithmetic expressions.
+
+@felix
 //Tokens
 union token_t  =
   | T_num of double
@@ -325,37 +354,36 @@ instance Str[token_t] {
     endmatch
     ;
 }
+@
 
-//Explode a string into a list of char
-fun explode (s:string):list[char] =
-{
-  val n:size = len s;
-  fun loop (acc:list[char]) (i:size) : list[char] =>
-    if (i == n) then rev acc
-    else loop (Cons (s.[i], acc)) (i + 1)
-  ;
-  return loop (list[char]()) 0uz;
-};
+@h2 The "lexer"
 
-//Implode a list of char to a string
-fun implode (xs:list[char]) =>
-  fold_left (fun (a:string) (b:char):string => a + b) "" xs
-  ;
+@{number} produces "number" tokens.
 
+@felix
 //Number token
 var number:parser[char, token_t] =
   (digits &~ optfrac &~ optexp) >=~
     (fun (p:list[char] * list[char], cse:list[char]):token_t =>
       T_num (atof (implode (p.0 + p.1 + cse))))
   ;
+@
 
+@{identifier} produces "identifier" tokens.
+
+@felix
 //Identifier token
 var identifier : parser[char, token_t] =
   (letter &~ (zero_or_more letter)) >=~ 
     (fun (c:char, cs:list[char]):token_t => 
        T_ident (implode (Cons (c, cs))))
   ;
+@
 
+The following set of parsers deals with the remaining single character
+token types.
+
+@felix
 //Operator token
 var operator : parser[char, token_t] =
   token (
@@ -399,28 +427,44 @@ var semicolon : parser[char, token_t] =
       | _ => None[token_t]
      endmatch
   );
+@
 
+A parser of white space consumes a space character but produces no
+significant information.
+
+@felix
 //Parse a whitespace character
-var space_ : parser[char, singular_value_t] =
- token (fun (ch:char) : opt[singular_value_t] =>
+var space_ : parser[char, unit] =
+ token (fun (ch:char) : opt[unit] =>
    match ch with
-     | c when c == char ' ' => Some singular_value
-     | c when c == char '\t' => Some singular_value
-     | c when c == char '\n' => Some singular_value
-     | c when c == char '\r' => Some singular_value
-     | _ => None[singular_value_t]
+     | c when c == char ' ' => Some ()
+     | c when c == char '\t' => Some ()
+     | c when c == char '\n' => Some ()
+     | c when c == char '\r' => Some ()
+     | _ => None[unit]
    endmatch
   );
+@
 
+A parser of spaces follows easily.
 
+@felix
 //Parser of whitespace
-fun spaces (toks:list[char]) : parsed[char, singular_value_t] =>
+fun spaces (toks:list[char]) : parsed[char, unit] =>
   (((space_ &~ spaces) >=~ 
-       fst[singular_value_t, singular_value_t])
-    |~ empty[char, singular_value_t](singular_value))
+       fst[unit, unit])
+    |~ empty[char, unit](()))
   toks
   ;
+@
 
+Finally, the lexical analyzer which computes a @{list[token_t]} from
+an input @{list[char]}. It is defined by the regular expression
+@pre
+lex := spaces((identifier|number|operator|paren|semicolon|equal)spaces)*
+@
+
+@felix
 //Lexer for the language of arithmetic expressions
 fun lex (toks : list[char]) : parsed [char, list[token_t]] =>
     (spaces &~ 
@@ -430,10 +474,19 @@ fun lex (toks : list[char]) : parsed [char, list[token_t]] =>
         |~ paren 
         |~ semicolon 
         |~ equal) &~ spaces) >=~ 
-    (fst[token_t, singular_value_t])) 
-       >=~ snd[singular_value_t, list[token_t]]) toks
+    (fst[token_t, unit])) 
+       >=~ snd[unit, list[token_t]]) toks
   ;
+@
 
+@h1 Parsing
+
+We present the type of ASTs (abstract syntax trees). It is with values
+of this type that arithmetic expressions will be realized.
+
+@h2 Abstract syntax trees and primitives
+
+@felix
 //Arithmetic expressions
 union ast_t =
   | E_const of double
@@ -456,7 +509,12 @@ fun str (ast : ast_t) : string =>
     | E_let (s, e) => "E_let (" + s + ", " + str e + ")"
   endmatch
   ;
+@
 
+The first in this set of functions, @{num}, is a parser of number
+tokens producing (literal) number expressions.
+
+@felix
 //Constants
 val num:parser[token_t, ast_t] =
   token (
@@ -466,7 +524,11 @@ val num:parser[token_t, ast_t] =
         | _ => None[ast_t]
       endmatch
   );
+@
 
+@{ident} is a parser of "identifier" expressions.
+
+@felix
 //Identifiers
 val ident:parser[token_t, ast_t] =
   token (
@@ -475,7 +537,11 @@ val ident:parser[token_t, ast_t] =
         | T_ident s => Some (E_var s)
         | _ => None[ast_t]
   );
+@
 
+@{addop} is the parser of additive expressions.
+
+@felix
 //Addition, subtraction operators
 val addop:parser[token_t, ast_t -> ast_t -> ast_t] =
   token (
@@ -486,7 +552,11 @@ val addop:parser[token_t, ast_t -> ast_t -> ast_t] =
         | _ => None[ast_t -> ast_t -> ast_t]
         endmatch
   );
+@
 
+@{mulop} the parser of multiplicative expressions.
+
+@felix
 //Multiplication, division operators
 val mulop:parser[token_t, ast_t -> ast_t -> ast_t] =
   token (
@@ -497,7 +567,17 @@ val mulop:parser[token_t, ast_t -> ast_t -> ast_t] =
         | _ => None[ast_t -> ast_t -> ast_t]
         endmatch
   );
+@
 
+Note that @{addop} amd @{mulop} produce <em>functions</em> on a
+successful parse.
+
+The result of a parser @{p} say, can be used to compute a new parser
+@{q} that then attempts a parse on the remains. Informally we might
+say this as @{p} "given to" @{q}. This function has infix operator
+form @{&gt;&gt;=~}
+
+@felix
 //A parser that feeds its result into another
 fun givento[A, B, C] (p1:parser[A, B], p2:B -> parser[A, C]) : parser[A, C] =>
   fun (toks : list[A]) : parsed[A, C] =>
@@ -506,7 +586,16 @@ fun givento[A, B, C] (p1:parser[A, B], p2:B -> parser[A, C]) : parser[A, C] =>
       | #Parse_failed => Parse_failed[A, C]
      endmatch
     ;
+@
 
+The @{&gt;&gt;=~} operator is critical to the implementation of
+@{left_assoc} : the analyzer for expressions with associative infix
+operators which recognizes the grammar
+@pre 
+expr := term (op term)* 
+@
+
+@felix
 //Build left-associative trees e.g. expr := term (op term)*
 fun left_assoc[A, B] 
   (term : parser[A, B]) 
@@ -518,45 +607,55 @@ fun left_assoc[A, B]
   in
     (term >>=~ sequence)
 ;
+@
 
+These are all the single token parsers that don't don't map to actual
+expressions (their occurrences do not result in nodes in the abstract
+syntax tree).
+
+@felix
 //Opening paren
-var open_paren : parser[token_t, singular_value_t] =
-  let fun t (tok : token_t) : opt[singular_value_t] =>
+var open_paren : parser[token_t, unit] =
+  let fun t (tok : token_t) : opt[unit] =>
     match tok with
-    | #T_lparen => Some singular_value
-    | _ => None[singular_value_t]
+    | #T_lparen => Some ()
+    | _ => None[unit]
   in token t
 ;
 
 //Closing paren
-var close_paren : parser[token_t, singular_value_t] =
-  let fun t (tok : token_t) : opt[singular_value_t] =>
+var close_paren : parser[token_t, unit] =
+  let fun t (tok : token_t) : opt[unit] =>
     match tok with
-    | #T_rparen => Some singular_value
-    | _ => None[singular_value_t]
+    | #T_rparen => Some ()
+    | _ => None[unit]
   in token t
 ;
 
 //Semi-colon
-var semi : parser[token_t, singular_value_t] =
-  let fun t (tok : token_t) : opt[singular_value_t] =>
+var semi : parser[token_t, unit] =
+  let fun t (tok : token_t) : opt[unit] =>
     match tok with
-    | #T_semicolon => Some singular_value
-    | _ => None[singular_value_t]
+    | #T_semicolon => Some ()
+    | _ => None[unit]
   in token t
 ;
 
 //Equals sign
-var equals : parser[token_t, singular_value_t] =
-  let fun t (tok : token_t) : opt[singular_value_t] =>
+var equals : parser[token_t, unit] =
+  let fun t (tok : token_t) : opt[unit] =>
     match tok with
-    | #T_equal => Some singular_value
-    | _ => None[singular_value_t]
+    | #T_equal => Some ()
+    | _ => None[unit]
   in token t
 ;
+@
 
-//A language of arithmetic expressions
-/*
+@h2 The "parser"
+
+The language of arithmetic expressions will be defined by the
+following grammar:
+@pre
 expr_list :=
   | expr (';' expr)*
   ;
@@ -571,47 +670,77 @@ fact :=
   | num
   | identifier
   | '( expr ')
- */
+  ;
+@
 
+@felix
 //expr_list := expr (';' expr)*
 var expr_list : parser[token_t, list[ast_t]] = 
-  ((expr &~ *((semi &~ expr) >=~ snd[singular_value_t, ast_t])
-     >=~ prepend[ast_t]))
+  ((expr &~ *((semi &~ expr) >=~ snd[unit, ast_t])
+     >=~ Cons[ast_t]))
    |~empty[token_t, list[ast_t]] (list[ast_t]())
   ;
+@
 
-//expr :=
-//| bind
-//| term (['+'|'-'] term)*
-//;
+For simplicity, we write the expression rule this way:
+@pre
+expr :=
+| bind
+| term (['+'|'-'] term)*
+;
+@
+
+@felix
 fun expr (toks : list[token_t]) : parsed[token_t, ast_t] =>
   (bind |~ left_assoc[token_t, ast_t] term addop) toks
   ;
+@
 
-//bind := identifier '=' expr
+where,
+@pre
+bind := identifier '=' expr
+@
+
+@felix
 var bind : parser[token_t, ast_t] =
-   (((ident &~ equals) >=~ fst[ast_t, singular_value_t]) &~ expr) >=~ 
+   (((ident &~ equals) >=~ fst[ast_t, unit]) &~ expr) >=~ 
    (fun (p : ast_t * ast_t) : ast_t => 
       match p.0 with
       | E_var e => E_let (e, p.1)
       endmatch)
   ;
+@
 
-//term := fact (['*'|'/'] fact)*
+The rule for terms:
+@pre
+term := fact (['*'|'/'] fact)*
+@
+
+@felix
 var term : parser[token_t, ast_t] = left_assoc[token_t, ast_t] fact mulop ;
+@
 
-//fact :=
-// | num
-// | identifier
-// | '( expr ')
-// ;
+The fule for factors:
+@pre
+fact :=
+ | num
+ | identifier
+ | '( expr ')
+ ;
+@
+
+@felix
 fun fact (toks : list[token_t]) : parsed[token_t, ast_t] =>
   (num |~ ident |~ 
     ((open_paren &~ expr &~ close_paren) >=~ 
-        (fun (p:(singular_value_t * ast_t), u:singular_value_t) : ast_t => p.1))
+        (fun (p:(unit * ast_t), u:unit) : ast_t => p.1))
    ) toks
   ;
+@
 
+@h2 Parser interface
+
+@felix
 //A function to extract the result of a parse
 fun accept[A, B] (result : parsed[A, B]) : opt[B] =>
   match result with
@@ -641,7 +770,12 @@ fun parse_expr_list (s : string) : opt[list[ast_t]] =>
   | #None => None[list[ast_t]]
   endmatch
   ;
+@
 
+This is an implementation detail that will be called on later. It's
+a lookup function on associative lists.
+
+@felix
 //'assoc a l' returns the value associated with key 'a in the list of
 //pairs 'l'.  That is, 'assoc a [ ...; (a,b); ...] = b' if '(a,b)' is
 //the leftmost binding of 'a' in list 'l'
@@ -651,9 +785,22 @@ fun assoc[A, B with Eq[A]] (x : A) (l : list[(A * B)]) : opt[B] =>
     | Cons ((a, b), t) => if a == x then Some b else assoc x t
   endmatch
     ;
+@
 
+@h1 Evaluation
+
+Here's is how the success or failure of parsing and evaluation will be
+represented.
+
+@felix
 union result[A, B] =  Ok of A | Error of B ;
+@
 
+For our interpreter, in the above @{A} will be fixed to @{double} (the
+only "values" admitted by our language of arithmetic expressions will
+be real numbers) and @{B} to @{error_t} defined by the following.
+
+@felix
 union error_t =
   | Syntax_error
   | Unbound_variable of string
@@ -667,7 +814,12 @@ fun str (err : error_t) : string =>
     | #Division_by_zero => "Attempted division by zero"
   endmatch
   ;
+@
 
+We 'evaluate' expressions (instances of type @{ast_t}) using the
+method of environments. The environment is necessarily mutable.
+
+@felix
 //Evaluate an expression in an environment
 fun eval 
    (env:&list[(string * double)]) 
@@ -738,7 +890,12 @@ fun eval
       endmatch          
    endmatch)
   ;
+@
 
+With @{eval} at our disposal, we can write a function that tokenizes,
+parses and evaluates an expression in one shot.
+
+@felix
 gen parse_eval_expr
   (env:&list[(string*double)]) (s:string) : result[double, error_t] =
 {
@@ -750,7 +907,11 @@ gen parse_eval_expr
 
   return Error[double, error_t](Syntax_error);
 }
+@
 
+An analogous function to do the same for a sequence of expressions.
+
+@felix
 gen parse_eval_exprs 
   (env:&list[(string*double)]) (s:string) : result[list[double], error_t] =
 {
@@ -778,7 +939,14 @@ gen parse_eval_exprs
 
   return Error[list[double], error_t](Syntax_error);
 }  
+@
 
+@h2 The "repl"
+
+So, all that remains now is to put an interactive "front end" on the
+interpreter (a read-eval-print-loop).
+
+@felix
 proc prompt (continuing:bool) {
   if (not continuing) do
     write$ stdout, "? ";
@@ -850,15 +1018,25 @@ repl_loop : //iz in ur loop!
   done //repl_loop
   println$ "";
 }
+@
 
+When the program is executed, we go into the repl "loop"!
+
+@felix
 repl () ;
 @
+
+Here's some test input for the repl emulating what a user might write.
 @input
 x=1
 y=2
 x+y
 x+(x*y)+43-y/1
 @
+
+Given the above test input, this is the expected output from the
+interpreter.
+
 @expect
 
 Interpreter of arithmetic expressions (with variables)

@@ -1026,6 +1026,7 @@ let rec expr_unification bsym_table counter
 
       | BEXPR_closure (i,ts1), BEXPR_closure (j,ts2) when i = j -> ()
 
+(*
       | BEXPR_apply_prim _, _
       | BEXPR_apply_direct _, _
       | BEXPR_apply_stack _, _
@@ -1033,22 +1034,15 @@ let rec expr_unification bsym_table counter
       | _, BEXPR_apply_direct _
       | _, BEXPR_apply_stack _
          -> assert false
-
-      (*
+*)
       | BEXPR_apply_prim (i,ts1,e1),BEXPR_apply_prim(j,ts2,e2)
-      | BEXPR_apply ( (BEXPR_closure (i,ts1),_), e1),BEXPR_apply_prim(j,ts2,e2)
-      | BEXPR_apply_prim (i,ts1,e1),BEXPR_apply( (BEXPR_closure(j,ts2),_),e2)
-
       | BEXPR_apply_direct (i,ts1,e1),BEXPR_apply_direct(j,ts2,e2)
-      | BEXPR_apply ( (BEXPR_closure (i,ts1),_), e1),BEXPR_apply_direct(j,ts2,e2)
-      | BEXPR_apply_direct (i,ts1,e1),BEXPR_apply( (BEXPR_closure(j,ts2),_),e2)
+      | BEXPR_apply_stack(i,ts1,e1),BEXPR_apply_stack(j,ts2,e2)
         when i = j
         ->
         assert (List.length ts1 = List.length ts2);
-        teqns := combine ts1 ts2 @ !teqns;
+        teqns := List.combine ts1 ts2 @ !teqns;
         eqns := (e1,e2) :: !eqns
-
-      *)
 
       | BEXPR_coerce (e,t), BEXPR_coerce (e',t') ->
         teqns := (t,t') :: !teqns;
@@ -1130,3 +1124,5 @@ let expr_maybe_matches bsym_table counter tvars evars le re =
   *)
   try Some (expr_unification bsym_table counter eqns tvars evars)
   with Not_found -> None
+
+

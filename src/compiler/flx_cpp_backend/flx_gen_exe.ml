@@ -106,8 +106,11 @@ print_endline ("gen_exe: " ^ string_of_bexe bsym_table 0 exe);
     ;
     let subs =
       catmap ""
-      (fun ((_,t) as e,s) ->
-        let t = cpp_ltypename syms bsym_table t in
+      (fun ((_,typ) as e,s) ->
+        match typ with
+        | BTYP_tuple [] -> ""
+        | _ ->
+        let t = cpp_ltypename syms bsym_table typ in
         let e = ge sr e in
         "      " ^ t ^ " " ^ s ^ " = " ^ e ^ ";\n"
       )
@@ -749,6 +752,7 @@ print_endline ("gen_exe: " ^ string_of_bexe bsym_table 0 exe);
     | BEXE_nop (_,s) -> "      //Nop: " ^ s ^ "\n"
 
     | BEXE_assign (sr,(_,lhst as e1),(_,rhst as e2)) ->
+      if lhst = BTYP_tuple [] then "" else
       let comment = (if with_comments then "      //"^src_str^"\n" else "") in
       (* j: component to assign, ts: types of components *)
       let rec aux1 ls i out = 

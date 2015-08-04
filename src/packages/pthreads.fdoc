@@ -1,13 +1,34 @@
 @title Preemptive Threading Support
-@tangler pthread.flx            = share/lib/std/control/pthread.flx
-@tangler pchannels.flx          = share/lib/std/control/pchannels.flx
-@tangler ppipe.flx              = share/lib/std/control/ppipe.flx
-@tangler forkjoin.flx           = share/lib/std/control/forkjoin.flx
-@tangler mutex.flx              = share/lib/std/control/mutex.flx
-@tangler semaphore.flx          = share/lib/std/control/semaphore.flx
-@tangler condition_variable.flx = share/lib/std/control/condition_variable.flx
-@tangler ts_counter.flx         = share/lib/std/control/ts_counter.flx
-@tangler ts_bound_queue.flx     = share/lib/std/control/ts_bound_queue.flx
+@tangler __init__.flx           = share/lib/std/pthread/__init__.flx
+@tangler pthread.flx            = share/lib/std/pthread/pthread.flx
+@tangler pchannels.flx          = share/lib/std/pthread/pchannels.flx
+@tangler ppipe.flx              = share/lib/std/pthread/ppipe.flx
+@tangler forkjoin.flx           = share/lib/std/pthread/forkjoin.flx
+@tangler mutex.flx              = share/lib/std/pthread/mutex.flx
+@tangler semaphore.flx          = share/lib/std/pthread/semaphore.flx
+@tangler condition_variable.flx = share/lib/std/pthread/condition_variable.flx
+@tangler ts_counter.flx         = share/lib/std/pthread/ts_counter.flx
+@tangler ts_bound_queue.flx     = share/lib/std/pthread/ts_bound_queue.flx
+@tangler atomic.flx             = share/lib/std/pthread/atomic.flx
+@tangler threadpool.flx         = share/lib/std/pthread/threadpool.flx
+@tangler threadpoolex1.flx      = share/demo/threadpoolex1.flx
+@tangler pfor.fsyn              = share/lib/grammar/pfor.fsyn
+
+@h1 Pthread Synopsis
+@tangle __init__.flx
+
+// pthreads (portable)
+include "std/pthread/pthread";
+//include "std/pthread/pchannels";
+include "std/pthread/mutex";
+//include "std/pthread/ts_counter";
+//include "std/pthread/ts_bound_queue";
+//include "std/pthread/semaphore";
+//include "std/pthread/condition_variable";
+//include "std/pthread/ppipe";
+//include "std/pthread/forkjoin";
+//include "std/pthread/atomic";
+//include "std/pthread/threadpool";
 
 @h1 Pthreads.
 General support for pre-emptive threading, aka shared 
@@ -55,7 +76,7 @@ open class Pthread
       var fthr = mk_thread con;
       svc$ svc_spawn_pthread fthr;
   }
-
+  proc thread_yield : 1 = "PTF gcp->collector->get_thread_control()->yield();";
 }
 
 @h1 Pchannels.
@@ -315,6 +336,13 @@ open class ForkJoin
 
 }
 @h1 Mutual Exclusion Lock (Mutex)
+Mutex may be used to protect some region of memomry
+associated with that mutex conceptually, by locking
+the mutex for a short period of time. The region may
+then be modified atomically.
+
+A Felix mutex is created on the heap and must be destroyed
+after use manually, they're not garbage collected.
 @tangle mutex.flx
 
 open class Mutex
@@ -329,10 +357,35 @@ open class Mutex
   proc destroy: mutex = "delete $1;";
 }
 @h1 Semaphores.
+A semaphore is a counted lock. The @{sem_post} procedure
+increments the counter, and the @{sem_wait} procedure decrements it.
+However, the counter may not become negative so instead, if it
+were to become negative, the @{sem_wait} procedure blocks the current
+pthread, and the pthread joins a set of pthreads waiting on the
+semaphore. When the counter is finally incremented by a call
+from some pthread to @{sem_post} one of the pthreads waiting
+with @{sem_wait} is allowed to proceed, again decrementing 
+the counter to zero so the remaining pthreads waiting continue
+to do so.
+
+The procedure @{sem_trywait} instead returns a flag indicating
+whether it succeeded in decrementing the counter or not.
+
+The term <em>post</em> is derived from the idea of posting a flag.
+
+The counting feature of a semaphore is analogous to shoppers
+in a store. The @{sem_post} function puts products on the shelf,
+whilst the the @{sem_wait} function represents an order on which
+the customer is waiting due to unavailable stock .. and @{sem_trywait}
+is the customer that, seeing there is no available stock, decides
+to go elsewhere!
+
 @tangle semaphore.flx
 
 open class Semaphore
 {
+  // FIXME: does not comply with GC friendly blocking protocol!
+
   requires package "pthread";
   type semaphore = "::flx::pthread::flx_semaphore_t*" requires semaphore_hxx;
   ctor semaphore = "new ::flx_pthread::flx_semaphore_t";
@@ -379,6 +432,7 @@ open class Condition_Variable
 }
 
 @h1 Thread Safe Counter.
+Probably redundant now we have upgraded to C++11 and have atomics.
 @tangle ts_counter.flx
 
 open class Ts_counter
@@ -405,31 +459,392 @@ open class TS_Bound_Queue
   private type bQ_ = "::flx::pthread::bound_queue_t";
   _gc_pointer _gc_type bQ_ type ts_bound_queue_t[T] = "::flx::pthread::bound_queue_t*" 
     requires 
-     package "flx_pthread",
+     package "flx_bound_queue",
      scanner "::flx::pthread::bound_queue_scanner"
   ;
   ctor[T] ts_bound_queue_t[T]: !ints = 
     "new (*PTF gcp, @0, false) ::flx::pthread::bound_queue_t((size_t)$1)";
-  private proc _enqueue[T]: ts_bound_queue_t[T] * &T = "$1->enqueue((void*)$2);";
-  private gen _dequeue[T]: ts_bound_queue_t[T] -> &T = "(?1*)$1->dequeue();";
+
+  // NOTE: enqueue/dequeue on queues uses suspend/resume
+  // to tell any pending collector it is safe to proceed
+  // whilst it is doing the operations (which may block),
+  // to block returning from the I/O during a collection
+  // AND, if the I/O completed before the collection got
+  // going, to yield at this point.
+
+
+  private proc _enqueue[T]: ts_bound_queue_t[T] * &T = """
+    FLX_SAVE_REGS;
+    PTF gcp->collector->get_thread_control()->suspend();
+    $1->enqueue((void*)$2);
+    PTF gcp->collector->get_thread_control()->resume();
+  """;
+
+
+  // Duh .. what happens if $2 storage location is set by
+  // the dequeue in the middle of a collection?
+  // it might be NULL when scanned, but by the time the queue
+  // is scanned the value will be lost from the queue and
+  // in the variable instead!
+  // The RACE is on!
+  private proc _dequeue[T]: ts_bound_queue_t[T] * &&T = """
+    FLX_SAVE_REGS;
+    PTF gcp->collector->get_thread_control()->suspend();
+    *$2=(?1*)$1->dequeue();
+    PTF gcp->collector->get_thread_control()->resume();
+  """;
+
   proc enqueue[T] (Q:ts_bound_queue_t[T])  (elt:T) {
      _enqueue(Q, new elt);
   }
-  gen dequeue[T] (Q:ts_bound_queue_t[T]): T => *(_dequeue Q);
-  proc wait[T]: ts_bound_queue_t[T] = "$1->wait_until_empty();";
+
+  gen dequeue[T] (Q:ts_bound_queue_t[T]): T = {
+    var x:&T;
+    _dequeue (Q,&x);
+    return *x;
+  }
+
+
+  proc wait[T]: ts_bound_queue_t[T] = """
+    FLX_SAVE_REGS;
+    PTF gcp->collector->get_thread_control()->suspend();
+    $1->wait_until_empty();
+    PTF gcp->collector->get_thread_control()->resume();
+  """;
+
   proc resize[T]: ts_bound_queue_t[T] * !ints = "$1->resize((size_t)$2);";
  
 }
 
+@h1 Atomic operations
+@tangle atomic.flx
+open class Atomic
+{
+  // note: only works for some types: constraints need to be added.
+  // We have to use a pointer because atomics aren't copyable
+
+  type atomic[T]="::std::atomic<?1>*" requires Cxx11_headers::atomic;
+
+  // FIXME: not managed by GC yet!
+  // constructor
+  ctor[T] atomic[T]: T = "(new ::std::atomic<?1>($1))"; 
+
+  proc delete[T] : atomic[T] = "delete $1;";
+
+  // note: only works for even less types! Constraints needed.
+  proc pre_incr[T] : &atomic[T] = "++**$1;";
+  proc pre_decr[T] : &atomic[T] = "--**$1;";
+  gen load[T] : atomic[T] -> T = "$1->load()";
+  proc store[T] : atomic[T] * T = "$1->store($2);";
+  proc store[T] (a:atomic[T]) (v:T) { store (a,v); }
+
+  instance[T] Str[atomic[T]] {
+    fun str (var x:atomic[T]) => x.load.str;
+  }
+  inherit[T] Str[atomic[T]];
+}
+
+@h1 Thread Pool
+A thread pool is a global object containing set of running threads
+and a queue. Instead of spawning a new thread, the client just queues
+the job instead. Each thread grabs a job from the queue and runs it,
+on completion it grabs another job.
+
+The primary advantage of a global thread pool is it prevent oversaturation
+of the set of processors and thus excess context switching. The main
+downside is monitoring the completed state of jobs.
+
+Do not use the threadpool for quick jobs, there is a significant
+overhead posting a job.
+
+@tangle threadpool.flx
+
+include "std/pthread/ts_bound_queue";
+include "std/pthread/atomic";
+include "std/io/faio";
+include "std/pthread/condition_variable";
+include "std/pthread/pchannels";
+
+class ThreadPool
+{
+  typedef job_t = 1 -> 0;
+  private const ThreadStop : job_t = "NULL";
+  private fun isStop : job_t -> bool = "$1==NULL";
+  private var clock = #Faio::mk_alarm_clock;
+  private var jobqueue = ts_bound_queue_t[job_t] 1024; // queue up to 1K jobs
+  private var nthreads = 8; // great default for quad core i7 ?
+
+  // number of threads actually running
+  private var running = atomic 0;
+
+  // number of threads blocked waiting on a barrier
+  private var waiting = atomic 0;
+
+  // barrier lock
+  private var block = #condition_variable;
+  private var bmux = #mutex;
+
+  fun get_nthreads () => nthreads;
+
+  // This is a flag used to protect against nested pfor loops.
+  // If there is a nested pfor loop, it will just execute serially
+  // in the calling thread.
+  private var pforrunning = atomic 0;
+
+  proc barrier() {
+    lock bmux;
+    ++waiting;
+    if waiting.load == nthreads do
+      waiting.store 0;
+      broadcast block;
+    else
+    again:>
+      wait (block,bmux);
+      if waiting.load != 0 goto again;
+    done
+    unlock bmux; 
+  }
+
+  proc start () { 
+     for i in 1..nthreads call spawn_pthread jobhandler;
+  }
+
+  proc start (n:int) {
+     nthreads = n;
+     #start;
+  }
+
+  private proc jobhandler () {
+     ++running;
+     rpt:while true do
+       var job = dequeue jobqueue;
+       if isStop job break rpt;
+       job; 
+       thread_yield();
+     done
+     --running;
+  }
+
+  proc queue_job (job:job_t) {
+    if running.load == 0 call start ();
+    if nthreads > 0 do 
+      call enqueue jobqueue job;
+    else
+      call job;
+    done
+  }
+
+  proc stop () {
+    for i in 1..nthreads 
+      call enqueue jobqueue ThreadStop;
+    while running.load != 0 
+      call Faio::sleep(clock,0.001);
+  }
+
+  proc post_barrier() {
+    if nthreads > 0
+      for i in 1..nthreads call queue_job barrier;
+  }
+
+  proc notify (chan:opchannel[int]) () {
+    write (chan,1);
+  }
+
+  proc join () {
+    if nthreads > 0 do
+      post_barrier;
+      var ip,op = #mk_iopchannel_pair[int];
+      queue_job$ notify op;
+      var x = read ip;
+      C_hack::ignore(x);
+    done
+  }
+
+  proc pfor_segment (first:int, last:int) (lbody: int * int -> 1 -> 0)
+  {
+//println$ "Pfor segment " + first.str + "," last.str;
+    var N = last - first + 1;
+    var nt = nthreads + 1;
+    if pforrunning.load == 0 and N >= nthreads and nthreads > 0 do
+      pforrunning.store 1;
+      for var counter in 0 upto nt - 2 do
+        val sfirst = first + (N * counter) / nt;
+        val slast = first + (N * (counter + 1)) / nt - 1;
+  //println$ "QUEUE JOB: Counter = " + counter.str + ", sfirst=" + sfirst.str + ", slast=" + slast.str;
+        ThreadPool::queue_job$ lbody (sfirst, slast);
+      done
+      sfirst = first + (N * (nt - 1)) / nt;
+      slast = last;
+  //println$ "UNQUEUED JOB: Counter = " + counter.str + ", sfirst=" + sfirst.str + ", slast=" + slast.str;
+      lbody (sfirst, slast) ();
+      join;
+      pforrunning.store 0;
+    else
+      // Run serially
+      lbody (first, last) ();
+    done
+  }
+
+  inline proc forloop (lbody: int -> 0) (first:int, last:int) ()
+  {
+//println$ "forloop " + first.str + "," + last.str;
+    for var i in first upto last call lbody i; 
+  }
+  inline proc pforloop (first: int) (last:int) (lbody: int -> 0)
+  {
+    pfor_segment (first, last)  (forloop lbody);
+  }
+  inline proc tpfor (first:int, last:int, lbody: int-> 0)
+  {
+     pforloop first last lbody;
+  }
+ 
+}
+
+@h2 Parallel loop grammar
+@tangle pfor.fsyn
+syntax pfor
+{
+   requires loops, blocks;
+
+   //$ Parallel For loop
+   loop_stmt := "pfor" sname "in" sexpr "upto" sexpr block =>#
+    """
+    (let* 
+      (
+        (ctlvar _2)
+        (first _4)
+        (last _6)
+        (body _7)
+        (int (nos "int"))
+        (param `(PVar ,ctlvar ,int none)) ;; kind name type defaultvalue
+        (params `((,param) none))               ;; parameter list with constraint
+        (sfunargs `(,params))                   ;; HOF list of parameter lists
+        (proc `(ast_lambda ,_sr (,dfltvs ,sfunargs (ast_void ,_sr) (,body))))
+        (call `(ast_call ,_sr ,(nos "tpfor")  (ast_tuple ,_sr (,first ,last ,proc))))
+      )
+      ;;(begin (display body) (display "\n*****\n")
+      call
+      ;;)
+    )
+    """;
 
 
+}
+
+@h2 Thread Pool Demo
+@tangle threadpoolex1.flx
+include "std/pthread/threadpool";
+open ThreadPool;
+
+// Matrix multiply
+macro val N = 1000;
+typedef vec_t = array[double, N];
+typedef mx_t = array[vec_t,N];
+var a : mx_t;
+var b : mx_t;
+var r : mx_t;
+var s : mx_t;
+
+proc clear (mx:&mx_t) {
+  for i in 0..<N 
+  for j in 0..<N 
+    perform mx . i . j <- 0.0;
+}
+
+proc rinit (mx:&mx_t) {
+  for i in 0..<N
+  for j in 0..<N
+    perform mx . i . j <- #rand.double / RAND_MAX.double;
+}
+
+fun check() = {
+  for i in 0..<N
+  for j in 0..<N
+    if r.i.j != s.i.j return false;
+  return true;
+}
+
+proc verify() {
+  if #check do
+    println$ "Verified";
+  else
+    println "Wrong!";
+  done 
+}
+
+clear &r;
+clear &s;
+rinit &a;
+rinit &b;
+
+fun inner_product (pr: &vec_t, pc: &vec_t) = 
+{
+  var sum = 0.0;
+  for (var k=0; k<N; ++k;)
+    perform sum = sum + *(pr.k) * *(pc.k);
+  return sum;
+}
+
+// naive multiply
+var start = #time;
+begin
+  for i in 0..<N 
+  for (var j=0; j<N; ++j;)
+    perform &r . i . j <- inner_product (&a.i, &b.j);
+  s = r;
+end
+var fin = #time;
+println$ "Naive mul elapsed " + (fin - start).str + " seconds";
+
+ThreadPool::start 8;
+// naive parallel multiply
+noinline proc inner_products_proc (var i:int)
+{
+  for (var j=0; j<N; ++j;) 
+    perform &r . i . j <- inner_product (&a.i, &b.j);
+}
+
+noinline proc inner_products_job (var i:int) () {
+  for (var j=0; j<N; ++j;) 
+    perform &r . i . j <- inner_product (&a.i, &b.j);
+}
+
+clear &r;
+start = #time;
+begin
+  for i in 0..<N
+    call ThreadPool::queue_job$ inner_products_job (i);
+  ThreadPool::join;
+end
+fin = #time;
+println$ "Naive Parallel mul elapsed " + (fin - start).str + " seconds";
+verify;
+
+// smart parallel multiply
+clear &r;
+start = #time;
+begin
+  ThreadPool::pforloop 0 (N - 1) inner_products_proc;
+end
+fin = #time;
+println$ "Smart Parallel mul elapsed " + (fin - start).str + " seconds";
+verify;
+
+// smart parallel multiply with syntax
+clear &r;
+start = #time;
+begin
+  pfor i in 0 upto (N - 1) do
+  for (var j=0; j<N; ++j;) 
+    perform &r . i . j <- inner_product (&a.i, &b.j);
+  done
+end
+fin = #time;
+println$ "pfor mul elapsed " + (fin - start).str + " seconds";
+verify;
 
 
-
-
-
-
-
-
+ThreadPool::stop;
 
 
