@@ -185,6 +185,10 @@ src: [^/\\]+\.cpp
    tangle("src: posix/.*\\.cpp")
 
 
+@if 'options' not in dir(pyconfig.TARGET_CXX):
+    pyconfig.TARGET_CXX.options = {}
+@if 'FLX_SOCKLEN_T' not in dir(pyconfig.TARGET_CXX.options):
+    pyconfig.TARGET_CXX.options.FLX_SOCKLEN_T = 'int'
 
 
 
