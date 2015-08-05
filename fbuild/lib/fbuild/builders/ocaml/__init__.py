@@ -333,6 +333,16 @@ class Builder(fbuild.builders.AbstractCompilerBuilder):
 
         cmd.extend(self.flags)
         cmd.extend(flags)
+
+        # if there is no suffix on the output it is a native binary
+        # on Windows these need to have a .exe extension for ocamlopt
+        # to build them properly.
+
+        arch = fbuild.builders.platform.guess_platform(self.ctx)
+        if 'windows' in arch or 'cygwin' in arch:
+            if "." not in dst:
+                dst += ".exe"
+
         cmd.extend(('-o', dst))
         cmd.extend(extra_srcs)
         cmd.extend(srcs)

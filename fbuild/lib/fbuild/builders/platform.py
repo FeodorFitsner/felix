@@ -138,7 +138,7 @@ def static_lib_suffix(ctx, platform=None):
 
 def shared_obj_suffix(ctx, platform=None):
     platform = platform if platform else guess_platform(ctx)
-    if 'windows' in platform:
+    if 'windows' in platform or 'cygwin' in platform:
         return '_shared.obj'
     else:
         return '.os'
@@ -163,7 +163,7 @@ def shared_lib_suffix(ctx, platform=None):
 
 def exe_suffix(ctx, platform=None):
     platform = platform if platform else guess_platform(ctx)
-    if 'windows' in platform:
+    if 'windows' in platform or 'cygwin' in platform:
         return '.exe'
     else:
         return ''
