@@ -7,14 +7,20 @@
 // Originally the PCRE C++ wrapper, but adapted to use
 // the new automata-based regular expression engines.
 
+#if defined(WIN32)
+#define MINGW;
+#endif
+
 #include "re2/re2.h"
 
 #include <stdio.h>
 #include <string>
 #if defined(WIN32)
+#ifndef MINGW
 #define strtoll _strtoi64
 #define strtoull _strtoui64
 #define strtof strtod
+#endif//MINGW
 #else
 #include <pthread.h>
 #endif//defined(WIN32)
