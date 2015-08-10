@@ -10,37 +10,39 @@ from buildsystem.config import config_call
 # ------------------------------------------------------------------------------
 
 def build_runtime(host_phase, target_phase):
-    path = Path('src', 'rtl')
+    path = Path(target_phase.ctx.buildroot/'share'/'src', 'rtl')
 
-    buildsystem.copy_hpps_to_rtl(target_phase.ctx,
-        path / 'flx_rtl.hpp',
-        path / 'flx_rtl_shapes.hpp',
-        path / 'flx_compiler_support_headers.hpp',
-        path / 'flx_compiler_support_bodies.hpp',
-        path / 'flx_dl.h',
-        path / 'flx_dlopen.hpp',
-        path / 'flx_dynlink.hpp',
-        path / 'flx_i18n.hpp',
-        path / 'flx_ioutil.hpp',
-        path / 'flx_strutil.hpp',
-        path / 'flx_executil.hpp',
-        path / 'flx_sync.hpp',
-        path / 'flx_async.hpp',
-        path / 'flx_world.hpp',
-        path / 'flx_async_world.hpp',
-        path / 'flx_world_config.hpp',
-        path / 'plat_linux.hpp',
-    )
+    print("[fbuild] [rtl] MAKING RTL ******* ")
+#    print("Copying files to rtl")
+#    buildsystem.copy_hpps_to_rtl(target_phase.ctx,
+#        path / 'flx_rtl.hpp',
+#        path / 'flx_rtl_shapes.hpp',
+#        path / 'flx_compiler_support_headers.hpp',
+#        path / 'flx_compiler_support_bodies.hpp',
+#        path / 'flx_dl.h',
+#        path / 'flx_dlopen.hpp',
+#        path / 'flx_dynlink.hpp',
+#        path / 'flx_i18n.hpp',
+#        path / 'flx_ioutil.hpp',
+#        path / 'flx_strutil.hpp',
+#        path / 'flx_executil.hpp',
+#        path / 'flx_sync.hpp',
+#        path / 'flx_async.hpp',
+#        path / 'flx_world.hpp',
+#        path / 'flx_async_world.hpp',
+#        path / 'flx_world_config.hpp',
+#        path / 'plat_linux.hpp',
+#    )
 
-    for f in Path.glob(path/"*.h"):
-      print("Copying " + f + " --> " +target_phase.ctx.buildroot/f )
-      copy(ctx=target_phase.ctx, src=f,dst=target_phase.ctx.buildroot/f)
-
-    for f in Path.glob(path/"*.hpp"):
-      print("Copying " + f + " --> " +target_phase.ctx.buildroot/f )
-      copy(ctx=target_phase.ctx, src=f,dst=target_phase.ctx.buildroot/f)
-
-    srcs = [copy(ctx=target_phase.ctx, src=f, dst=target_phase.ctx.buildroot / f) for f in Path.glob(path / '*.cpp')]
+#    for f in Path.glob(path/"*.h"):
+#      print("Copying " + f + " --> " +target_phase.ctx.buildroot/f )
+#      copy(ctx=target_phase.ctx, src=f,dst=target_phase.ctx.buildroot/f)
+#
+#    for f in Path.glob(path/"*.hpp"):
+#      print("Copying " + f + " --> " +target_phase.ctx.buildroot/f )
+#      copy(ctx=target_phase.ctx, src=f,dst=target_phase.ctx.buildroot/f)
+#
+    srcs = [f for f in Path.glob(path / '*.cpp')]
     includes = [
         target_phase.ctx.buildroot / 'host/lib/rtl',
         target_phase.ctx.buildroot / 'share/lib/rtl'

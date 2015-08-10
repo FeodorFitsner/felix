@@ -1,18 +1,17 @@
 @title The Felix Library
 @h1 Felix Run Time Library
 <dl>
+<dt><a href=Exceptions.fdoc>Exceptions</a></dt>
+<dd>Error Exits</dd>
+
 <dt><a href=gc.fdoc>Garbage Collector</a></dt>
 <dd>Memory Management Core</dd>
 
 <dt><a href=embed.fdoc>System Construction</a></dt>
 <dd>Core routines for embedding</dd>
 
-<dt><a href=embed.fdoc>System Construction</a></dt>
-<dd>Core routines for embedding</dd>
-
 <dt><a href=driver.fdoc>Dynamic Linkage and Driver</a></dt>
 <dd>The top level driver program and dynamic linkage library</dd>
-
 
 </dl>
 
