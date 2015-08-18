@@ -1,13 +1,17 @@
 @title Memory Management
-@tangler flx_gc.hpp               = share/lib/rtl/flx_gc.hpp
-@tangler flx_gc_private.hpp       = share/src/gc/flx_gc_private.hpp
-@tangler flx_gc.cpp               = share/src/gc/flx_gc.cpp
-@tangler flx_collector.hpp        = share/lib/rtl/flx_collector.hpp
-@tangler flx_collector.cpp        = share/src/gc/flx_collector.cpp
-@tangler flx_ts_collector.hpp     = share/lib/rtl/flx_ts_collector.hpp
-@tangler flx_ts_collector.cpp     = share/src/gc/flx_ts_collector.cpp
-@tangler gc.flx                   = share/lib/std/gc.flx
-@tangler flx_gc.py                = $PWD/buildsystem/flx_gc.py
+@tangler flx_gc.hpp                       = share/lib/rtl/flx_gc.hpp
+@tangler flx_gc_private.hpp               = share/src/gc/flx_gc_private.hpp
+@tangler flx_gc.cpp                       = share/src/gc/flx_gc.cpp
+@tangler flx_collector.hpp                = share/lib/rtl/flx_collector.hpp
+@tangler flx_collector.cpp                = share/src/gc/flx_collector.cpp
+@tangler pthread_thread_control_base.hpp  = share/lib/rtl/pthread_thread_control_base.hpp
+@tangler gc.flx                           = share/lib/std/gc.flx
+@tangler rtti.flx                         = share/lib/std/felix/rtti.flx
+@tangler flx_gc.flx                       = share/lib/std/felix/flx_gc.flx
+@tangler flx_gc.py                        = $PWD/buildsystem/flx_gc.py
+@tangler unix_flx_gc.fpc                  = $PWD/src/config/unix/flx_gc.fpc
+@tangler win32_flx_gc.fpc                 = $PWD/src/config/win32/flx_gc.fpc
+@tangler flx_gc_config.hpp                = $PWD/src/config/target/flx_gc_config.hpp
 
 @h1 The Felix Garbage Collector.
 Felix uses a garbage collector to provide secure automatic
@@ -85,6 +89,57 @@ a collection, all the threads must wait until the last
 one yields to the stop request, and then the collection
 is performed.
 
+@h2 Thread Control Base
+Note: this is part of the @{flx_pthread} library not the @{flx_gc} library.
+But only the header file is required. The @{thread_control_base_t}
+destructor is defined in @{pthread_thread_control.cpp}.
+
+The gc constuctor requires a thread_control_base_t pointer to be passed
+to it. The actual thread safe collector is defined in the pthread library.
+A non-thread version of the thread control base might be constructed
+for a single threaded Felix world instantiation but we do not currently
+provide one as pthreads are considered mandatory for Felix.
+
+@tangle pthread_thread_control_base.hpp
+#ifndef __PTHREAD_THREAD_CONTROL_BASE_HPP__
+#define __PTHREAD_THREAD_CONTROL_BASE_HPP__
+
+#include "flx_pthread_config.hpp"
+#include <vector>
+
+namespace flx { namespace pthread {
+
+struct thread_data_t {
+  thread_data_t(void *b) : stack_base(b), stack_top(0), active(true) {}
+  void *stack_base;
+  void *stack_top;
+  bool active;
+};
+
+struct memory_range_t {
+  memory_range_t(void *b_, void *e_) : b(b_), e(e_) {}
+  void *b;
+  void *e;
+};
+
+typedef ::std::vector<memory_range_t> memory_ranges_t;
+
+class PTHREAD_EXTERN thread_control_base_t
+{
+public:
+  virtual bool world_stop() = 0;
+  virtual void world_start() = 0;
+  virtual void resume() = 0;
+  virtual void suspend() = 0;
+  virtual void yield() = 0;
+  virtual ~thread_control_base_t()=0;
+  virtual  memory_ranges_t *get_block_list() = 0; // caller owns result and should delete it
+};
+}}
+#endif
+@
+
+
 @h2 Memory Management Abstraction Interface.
 @tangle flx_gc.hpp
 
@@ -93,7 +148,7 @@ is performed.
 
 #include <cstdlib>
 #include "flx_gc_config.hpp"
-#include "pthread_thread.hpp"
+#include "pthread_thread_control_base.hpp"
 #include <string>
 
 // we use an STL set to hold the collection of roots
@@ -1439,23 +1494,21 @@ again:
 
 unsigned long flx_collector_t::impl_collect()
 {
-  if(debug)
-    fprintf(stderr,"[gc] Request to collect, thread_control = %p, thread %lx\n", thread_control, (unsigned long)flx::pthread::get_current_native_thread());
   // THIS IS A BIT OF A HACK
   // but world_stop() is bugged!!
   // This is a temporary fix.
   FLX_SAVE_REGS;
   if (thread_control == NULL || thread_control->world_stop())
   {
-    if(debug)
-      fprintf(stderr,"[gc] Collecting, thread %lx\n", (unsigned long)flx::pthread::get_current_native_thread());
+    //if(debug)
+    //  fprintf(stderr,"[gc] Collecting, thread %lx\n", (unsigned long)flx::pthread::get_current_native_thread());
     pthread::memory_ranges_t * mr = thread_control? thread_control -> get_block_list() : NULL;
     mark(mr);
     delete mr;
     unsigned long collected = sweep();
     if(thread_control) thread_control->world_start();
-    if(debug)
-      fprintf(stderr,"[gc] FINISHED collect, thread %lx\n", (unsigned long)flx::pthread::get_current_native_thread());
+    //if(debug)
+    //  fprintf(stderr,"[gc] FINISHED collect, thread %lx\n", (unsigned long)flx::pthread::get_current_native_thread());
     return collected;
   }
   else {
@@ -1484,110 +1537,6 @@ flx_collector_t::~flx_collector_t()
   //
   //free_all_mem();
 }
-
-}}} // end namespaces
-
-@h1 Thread Safe Collector.
-The thread safe collector class @{flx_ts_collector_t} is derived
-from the @{flx_collector_t} class. It basically dispatches to
-its base with locks as required.
-
-@tangle flx_ts_collector.hpp
-
-#ifndef __FLX_TS_COLLECTOR_H__
-#define __FLX_TS_COLLECTOR_H__
-#include "flx_collector.hpp"
-#include "pthread_mutex.hpp"
-#include "pthread_thread.hpp"
-
-namespace flx {
-namespace gc {
-namespace collector {
-
-/// Naive thread safe Mark and Sweep Collector.
-struct GC_EXTERN flx_ts_collector_t :
-  public flx::gc::collector::flx_collector_t
-{
-  flx_ts_collector_t(allocator_t *, flx::pthread::thread_control_t *);
-  ~flx_ts_collector_t();
-
-private:
-  /// allocator
-  void *v_allocate(gc_shape_t *ptr_map, unsigned long);
-
-  /// collector (returns number of objects collected)
-  unsigned long v_collect();
-
-  // add and remove roots
-  void v_add_root(void *memory);
-  void v_remove_root(void *memory);
-
-  // statistics
-  unsigned long v_get_allocation_count()const;
-  unsigned long v_get_root_count()const;
-  unsigned long v_get_allocation_amt()const;
-
-private:
-  mutable flx::pthread::flx_mutex_t mut;
-};
-
-
-}}} // end namespaces
-
-#endif
-@
-
-@tangle flx_ts_collector.cpp
-
-
-#include "flx_rtl_config.hpp"
-#include "flx_ts_collector.hpp"
-
-namespace flx {
-namespace gc {
-namespace collector {
-
-flx_ts_collector_t::flx_ts_collector_t(allocator_t *a, flx::pthread::thread_control_t *tc) :
-  flx_collector_t(a,tc)
-{}
-
-flx_ts_collector_t::~flx_ts_collector_t(){}
-
-void *flx_ts_collector_t::v_allocate(gc_shape_t *ptr_map, unsigned long x) {
-  flx::pthread::flx_mutex_locker_t l(mut);
-  return impl_allocate(ptr_map,x);
-}
-
-unsigned long flx_ts_collector_t::v_collect() {
-  // NO MUTEX
-  return impl_collect();
-}
-
-void flx_ts_collector_t::v_add_root(void *memory) {
-  flx::pthread::flx_mutex_locker_t l(mut);
-  impl_add_root(memory);
-}
-
-void flx_ts_collector_t::v_remove_root(void *memory) {
-  flx::pthread::flx_mutex_locker_t l(mut);
-  impl_remove_root(memory);
-}
-
-unsigned long flx_ts_collector_t::v_get_allocation_count()const {
-  flx::pthread::flx_mutex_locker_t l(mut);
-  return impl_get_allocation_count();
-}
-
-unsigned long flx_ts_collector_t::v_get_root_count()const {
-  flx::pthread::flx_mutex_locker_t l(mut);
-  return impl_get_root_count();
-}
-
-unsigned long flx_ts_collector_t::v_get_allocation_amt()const {
-  flx::pthread::flx_mutex_locker_t l(mut);
-  return impl_get_allocation_amt();
-}
-
 
 }}} // end namespaces
 
@@ -1633,7 +1582,194 @@ open class Gc
 
 }
 @
+@h1 Rtti introspection
+@tangle rtti.flx
+class Rtti {
 
+  //$ The type of the collector.
+  type collector_t = "::flx::gc::generic::collector_t*";
+
+  //$ The type of an RTTI record.
+  type gc_shape_t = "::flx::gc::generic::gc_shape_t*";
+  fun isNULL: gc_shape_t -> bool = "$1==0";
+  typedef gc_shape_flags_t = uint;
+    val gc_flags_default = 0;
+    val gc_flags_immobile = 1;
+    val gc_flags_persistent = 2;
+    val gc_flags_conservative = 4;
+
+  //$ The type of a finalisation function.
+  typedef gc_finaliser_t = collector_t * address --> void;
+  typedef gc_encoder_t = address --> string;
+  typedef gc_decoder_t = address * +char * size --> size;
+
+  //$ Iterator to find the next shape after a given one.
+  fun next_shape: gc_shape_t -> gc_shape_t = "$1->next_shape";
+
+  //$ The C++ name of the Felix type.
+  fun cname: gc_shape_t -> +char = "$1->cname";
+
+  //$ The static number of elements in an array type.
+  //$ Note this is not the size of a varray!
+  fun number_of_elements: gc_shape_t -> size = "$1->count";
+
+  //$ Number of bytes in one element.
+  fun bytes_per_element: gc_shape_t -> size = "$1->amt";
+
+  //$ The finaliser function.
+  fun finaliser: gc_shape_t -> gc_finaliser_t  = "$1->finaliser";
+
+  //$ The encoder function.
+  fun encoder : gc_shape_t -> gc_encoder_t = "$1->encoder";
+
+  //$ The decoder function.
+  fun decoder: gc_shape_t -> gc_decoder_t = "$1->decoder";
+
+  //$ Check for offset data
+  fun uses_offset_table : gc_shape_t -> bool = "$1->scanner == ::flx::gc::generic::scan_by_offsets";
+
+  //$ The number of pointers in the base type.
+  //$ If the type is an array that's the element type.
+  fun _unsafe_n_offsets: gc_shape_t -> size = "((::flx::gc::generic::offset_data_t const *)($1->private_data))->n_offsets";
+
+  fun n_offsets (shape: gc_shape_t) : size => 
+    if uses_offset_table shape then _unsafe_n_offsets shape else 0uz
+  ;
+
+  //$ Pointer to the offset table.
+  fun _unsafe_offsets: gc_shape_t -> +size = "const_cast< ::std::size_t *>(((::flx::gc::generic::offset_data_t const *)($1->private_data))->offsets)";
+
+  fun offsets (shape: gc_shape_t) : +size => 
+    if uses_offset_table shape then _unsafe_offsets shape else C_hack::cast[+size] 0 
+  ;
+ 
+  //$ Flags.
+  fun flags: gc_shape_t -> gc_shape_flags_t = "$1->flags";
+
+  //$ Global head of the compiled shape list.
+  //$ This is actually the first type, since they're linked together.
+  fun shape_list_head : unit -> gc_shape_t = "PTF shape_list_head";
+
+  //$ C++ type_info for the type.
+  type type_info = "::std::type_info" requires header "#include <typeinfo>";
+
+  //$ C++ source name of the type.
+  fun name : type_info -> string = "::std::string($1.name())";
+
+  //$ C++ Type_info of a type.
+  const typeid[T]: type_info = "typeid(?1)";
+
+  // PLATFORM DEPENDENT, REQUIRES cxxabi.h.
+  // Only sure to work for gcc.
+  private proc _gxx_demangle: string * &string = """{
+    int status;
+    char *tmp=abi::__cxa_demangle($1.c_str(), 0,0, &status);
+    string s= string(tmp);
+    std::free(tmp);
+    *$2= s;
+    }
+  """ requires header "#include <cxxabi.h>";
+
+  //$ For gcc only, the C++ name a mangled name represents.
+  fun gxx_demangle(s:string) :string = 
+  {
+    var r: string;
+    _gxx_demangle(s, &r);
+    return r;
+  }
+
+  proc _link_shape[T]: &gc_shape_t = """
+    ::flx::gc::generic::gc_shape_t *p = (gc_shape_t*)malloc(sizeof(gc_shape_t));
+    p->next_shape = PTF shape_list_head;
+    PTF shape_list_head = p;
+    p->cname = typeid(?1).name();
+    p->count = 1;
+    p->amt = sizeof(?1);
+    p->finaliser = ::flx::gc::generic::std_finaliser<?1>;
+    p->n_offsets = 0;
+    p->offsets = 0;
+    p->flags = ::flx::gc::generic::gc_flags_default;
+    *$1 = p;
+    """ requires property "needs_gc";
+
+  //$ Put a new shape record into the global list.
+  //$ This routine constructs a new shape record on the heap.
+  //$ It fills in some of the data based on the type.
+  //$ It links the new record into the shape list.
+  //$ Then it stores the shape at the user specified address.
+  //$ Since the shape is represented in Felix by a pointer,
+  //$ subsequent modifications carry through to the linked shape object.
+  //$ This routine is only useful for adding a shape record for a statically
+  //$ known type: that's useful because not all statically known types get
+  //$ shape records: the compiler only generates them if the shape is
+  //$ required because an object of that type is allocated on the heap.
+  gen link_shape[T]()= { var p: gc_shape_t; _link_shape[T] (&p); return p; }
+}
+@
+
+@h1 Low level Garbage Collector Access
+@tangle flx_gc.flx
+class Collector
+{
+  open Rtti;
+  struct pointer_data_t
+  {
+     pointer: address;
+     head: address;
+     max_elements: ulong;  // dynamic slots
+     used_elements: ulong; // dynamic slots used
+     shape:gc_shape_t;
+  }; 
+
+  private type raw_pointer_data_t = "::flx::gc::generic::pointer_data_t" ;
+  private fun get_raw_pointer_data: address -> raw_pointer_data_t = 
+    "PTF gcp->collector->get_pointer_data($1)"
+    requires property "needs_gc"
+  ;
+  fun get_pointer_data (p:address) => C_hack::reinterpret[pointer_data_t](get_raw_pointer_data p);
+
+  fun is_felix_pointer (pd: pointer_data_t) => not (isNULL pd.head);
+  fun is_head_pointer (pd: pointer_data_t) => pd.pointer == pd.head; 
+  fun repeat_count (pd: pointer_data_t) => pd.used_elements *  pd.shape.number_of_elements.ulong;
+  fun allocated_bytes (pd: pointer_data_t) => pd.max_elements * 
+    pd.shape.number_of_elements.ulong * pd.shape.bytes_per_element.ulong
+  ;
+
+  //$ Diagnostic routine, dump pointer data and
+  //$ computed values.
+  proc print_pointer_data (pd: pointer_data_t)
+  {
+    println$ "Candidate pointer = " + pd.pointer.str;
+    println$ "Valid=" + pd.Collector::is_felix_pointer.str;
+    if pd.Collector::is_felix_pointer do
+      println$ "Is head=" + pd.Collector::is_head_pointer.str;
+      var shape = pd.shape;
+      println$ "Element type =  " + shape.cname.string;
+      println$ "Pod[has no finaliser] = " + shape.finaliser.address.isNULL.str;
+      var bpe = shape.bytes_per_element.ulong;
+      println$ "Bytes per element = " + bpe.str;
+      println$ "Static array length = " + shape.number_of_elements.str;
+      println$ "Dynamic array length = " + pd.used_elements.str; 
+      println$ "Max dynamic array length = " + pd.max_elements.str; 
+      var nelts = pd.used_elements * shape.number_of_elements.ulong;
+      println$ "Aggregate number of used elements " + nelts.str;
+      println$ "Store to serialise: " + (nelts * bpe) . str;
+    done
+  }
+
+  //$ Diagnostic routine, print info about a pointer.
+  proc print_pointer_data (p:address) 
+  {
+    var pd = Collector::get_pointer_data p;
+    print_pointer_data (pd);
+  }
+  proc print_pointer_data[T] (p:&T) => print_pointer_data (C_hack::cast[address] p);
+  proc print_pointer_data[T] (p:cptr[T]) => print_pointer_data (C_hack::cast[address] p);
+  proc print_pointer_data[T] (p:+T) => print_pointer_data (C_hack::cast[address] p);
+
+}
+@
+@h1 Bootstrap Build System
 @tangle flx_gc.py
 import fbuild
 from fbuild.functools import call
@@ -1657,7 +1793,6 @@ def build_runtime(host_phase, target_phase):
     libs = [
         call('buildsystem.judy.build_runtime', host_phase, target_phase),
         call('buildsystem.flx_exceptions.build_runtime', target_phase),
-        call('buildsystem.flx_pthread.build_runtime', target_phase),
     ]
 
     return Record(
@@ -1671,3 +1806,46 @@ def build_runtime(host_phase, target_phase):
             libs=[lib.shared for lib in libs]))
 @
 
+@h1 Configuration Database Records
+@tangle unix_flx_gc.fpc
+Name: flx_gc
+Platform: Unix 
+Description: Felix default garbage collector (Unix)
+provides_dlib: -lflx_gc_dynamic
+provides_slib: -lflx_gc_static
+includes: '"flx_gc.hpp"'
+library: flx_gc
+macros: BUILD_FLX_GC
+Requires: judy flx_exceptions
+build_includes: build/release/share/lib/rtl
+srcdir: src/gc
+src: .*\.cpp
+@
+
+@tangle win32_flx_gc.fpc
+Name: flx_gc
+Platform: Win32
+Description: Felix default garbage collector (Windows)
+provides_dlib: /DEFAULTLIB:flx_gc_dynamic
+provides_slib: /DEFAULTLIB:flx_gc_static
+includes: '"flx_gc.hpp"'
+Requires: judy
+library: flx_gc
+macros: BUILD_FLX_GC
+Requires: judy flx_exceptions
+build_includes: build/release/share/lib/rtl
+srcdir: src/gc
+src: .*\.cpp
+@
+
+@tangle flx_gc_config.hpp
+#ifndef __FLX_GC_CONFIG_H__
+#define __FLX_GC_CONFIG_H__
+#include "flx_rtl_config.hpp"
+#ifdef BUILD_FLX_GC
+#define GC_EXTERN FLX_EXPORT
+#else
+#define GC_EXTERN FLX_IMPORT
+#endif
+#endif
+@

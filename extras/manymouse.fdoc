@@ -7,10 +7,14 @@
 @tangler macosx_hidutilities.c  = $PWD/src/manymouse/macosx_hidutilities.c
 @tangler windows_wminput.c      = $PWD/src/manymouse/windows_wminput.c
 @tangler x11_xinput2.c          = $PWD/src/manymouse/x11_xinput2.c
+@tangler unix_manymouse.fpc     = $PWD/src/config/unix/manymouse.fpc
+@tangler win32_manymouse.fpc    = $PWD/src/config/win32/manymouse.fpc
+@tangler macosx_manymouse.fpc   = $PWD/src/config/macosx/manymouse.fpc
+@tangler flx_manymouse_config.h = $PWD/src/config/target/flx_manymouse_config.h
 
 @h1 Manymouse
 Code to support multiple mice on various platforms.
-@tangler flx_manymouse.hpp
+@tangle flx_manymouse.hpp
 #include "flx_manymouse_config.h"
 #include "manymouse.h"
 
@@ -3956,4 +3960,52 @@ const ManyMouseDriver *ManyMouseDriver_xinput2 = 0;
 /* end of x11_xinput2.c ... */
 
 @
+@h1 Config
+@tangle unix_manymouse.fpc
+Name: manymouse
+Description: Low level access to many mice.
+provides_dlib: -lflx_manymouse_dynamic
+provides_slib: -lflx_manymouse_static
+includes: '"flx_manymouse.hpp"'
+library: flx_manymouse
+macros: BUILD_FLX_MANYMOUSE
+srcdir: src/manymouse
+src: .*\.c
+@
+@tangle win32_manymouse.fpc
+Name: manymouse
+Description: Low level access to many mice.
+provides_dlib: /DEFAULTLIB:flx_manymouse_dynamic
+provides_slib: /DEFAULTLIB:flx_manymouse_static
+includes: '"flx_manymouse.hpp"'
+library: flx_manymouse
+macros: BUILD_FLX_MANYMOUSE
+srcdir: src/manymouse
+src: .*\.c
+@
+@tangle macosx_manymouse.fpc
+Name: manymouse
+Description: Low level access to many mice.
+provides_dlib: -lflx_manymouse_dynamic
+provides_slib: -lflx_manymouse_static
+requires_dlibs: ---framework=Carbon ---framework=IOKit 
+requires_slibs: ---framework=Carbon ---framework=IOKit 
+includes: '"flx_manymouse.hpp"'
+library: flx_manymouse
+macros: BUILD_FLX_MANYMOUSE
+srcdir: src/manymouse
+src: .*\.c
+@
 
+
+@tangle flx_manymouse_config.h
+#ifndef __FLX_MANYMOUSE_CONFIG_H__
+#define __FLX_MANYMOUSE_CONFIG_H__
+#include "flx_rtl_config.hpp"
+#ifdef BUILD_FLX_MANYMOUSE
+#define FLX_MANYMOUSE_EXTERN FLX_EXPORT
+#else
+#define FLX_MANYMOUSE_EXTERN FLX_IMPORT
+#endif
+#endif
+@

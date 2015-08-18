@@ -13,7 +13,7 @@ all: build test
 # default build
 #
 
-VERSION = 15.04.03
+VERSION = 15.08.15
 DISTDIR ?= ./build/dist
 PREFIX ?= /usr/local
 EXECPREFIX ?= ${PREFIX}/bin
@@ -68,17 +68,30 @@ help:
 	#   FBUILD_PARAMS: parameters to fbuild, default none
 	#     fbuild/fbuild-light --help for options
 
-build: extract user-build slow-flxg rebuild
+build: configure bootstrap slow-flxg rebuild
 
-dev-build: fbuild gendoc
+dev-build: bootstrap gendoc
 
-user-build: fbuild
+bootstrap: fbuild
 	cp ${BUILDROOT}/host/bin/bootflx ${BUILDROOT}/host/bin/flx
-	${BUILDROOT}/host/bin/flx --felix=build.fpc -c -od ${BUILDROOT}/host/lib/rtl src/lib/plugins/flx_plugin
+	${BUILDROOT}/host/bin/flx --felix=build.fpc -c -od ${BUILDROOT}/host/lib/rtl ${BUILDROOT}/share/lib/plugins/flx_plugin
 
 #
 # Core integrated build
 #
+
+configure: extract
+	#
+	# ============================================================
+	#
+	# CONFIGURING FELIX
+	#
+	#   See build/release/fbuild.log for full transcript
+	#
+	# ============================================================
+	#
+	$(PYTHON) fbuild/fbuild-light configure --buildroot=${FBUILDROOT} $(FBUILD_PARAMS)
+
 fbuild:
 	#
 	# ============================================================
@@ -158,7 +171,6 @@ install:
 	${BUILDROOT}/host/bin/flx_cp ${BUILDROOT}/share '(.*)' ${INSTALLDIR}'/share/$${1}'
 	${BUILDROOT}/host/bin/flx_cp ${BUILDROOT} '(VERSION)' ${INSTALLDIR}'/$${1}'
 	${BUILDROOT}/host/bin/flx_cp ${BUILDROOT}/host/bin '(flx)' ${EXECPREFIX}'/$${1}'
-	${BUILDROOT}/host/bin/flx_cp src/ '(.*\.(c|cxx|cpp|h|hpp|flx|flxh|fdoc|fsyn|fpc|ml|mli|html))' ${INSTALLDIR}'/share/src/$${1}'
 	${BUILDROOT}/host/bin/flx_cp speed/ '(.*)' ${INSTALLDIR}'/speed/$${1}'
 
 	rm -f ${INSTALLROOT}/felix-latest
@@ -430,7 +442,7 @@ lib: copy grammar
 		--target-bin=host \
 		--copy-library
 
-really-fast-rebuild:
+really-fast-rebuild: extract
 	# =========================================================
 	# rebuild everything from installed Felix except compiler
 	# [Note: requires LPATH variable be set in Makefile!]
@@ -450,7 +462,7 @@ really-fast-rebuild:
 	${LPATH}=${INSTALLDIR}/host/lib/rtl ${INSTALLDIR}/host/bin/flx_build_boot \
 		--build-all
 
-fast-rebuild:
+fast-rebuild: extract
 	# =========================================================
 	# rebuild everything in-place except the compiler
 	# [Note: requires LPATH variable be set in Makefile!]
@@ -489,7 +501,7 @@ fast-rebuild-nortl:
 	rm flx_build_boot
 
 
-rebuild:
+rebuild: extract
 	# =========================================================
 	# rebuild everything in-place except the compiler
 	# [Note: Slow and messy. Requires "flx" be built in build/release]
@@ -514,49 +526,6 @@ rebuild:
 	./flx --felix=build.fpc  src/tools/flx_build_boot \
 		--build-all
 	rm flx
-
-bootstrap:
-	# =========================================================
-	# Clean rebuild into separate directory build/trial
-	# followed by overwrite of build/release if all tests pass.
-	# [VERY SLOW!]
-	# [Requires Ocaml]
-	# [Requires flx already build in build/release]
-	# =========================================================
-	rm -rf tmp-dir trial-tmp build/trial
-	build/release/host/bin/flx --felix=build.fpc --clean
-	build/release/host/bin/flx --felix=build.fpc src/tools/flx_build_flxg
-	mkdir build/trial
-	mkdir build/trial/host
-	mkdir build/trial/host/bin
-	cp tmp-dir/flxg build/trial/host/bin
-	build/release/host/bin/flx --felix=build.fpc  src/tools/flx_build_prep \
-		--repo=.\
-		--target-dir=build/trial \
-		--target-bin=host \
-		--source-dir=build/release \
-		--source-bin=host \
-		--copy-repo \
-		--copy-pkg-db \
-		--copy-config-headers \
-		--copy-version \
-		--copy-library
-	build/release/host/bin/flx --felix=build.fpc  src/tools/flx_build_rtl \
-		--target-dir=build/trial \
-		--target-bin=host \
-		--source-dir=build/release \
-		--source-bin=host
-	build/release/host/bin/flx --felix=build.fpc  src/tools/flx_build_boot \
-		--target-dir=build/trial \
-		--target-bin=host \
-		--build-all
-	build/trial/host/bin/flx --test=build/trial --clean
-	mkdir -p trial-test
-	build/trial/host/bin/flx_tangle --indir=build/trial/share/src/test --outdir=trial-test
-	build/trial/host/bin/flx --test=build/trial --usage=prototype --expect --indir=trial-test/regress/rt --regex='.*\.flx'
-	rm -rf build/release
-	mv build/trial build/release
-	rm -rf trial-test
 
 sdltest:
 	build/release/host/bin/flx --felix=build.fpc --force -c -od sdlbin demos/sdl/edit_buffer
@@ -590,9 +559,8 @@ evtdemo:
 	# run
 	demos/embed/evtdemo
 
-.PHONY : build32 build64 build test32 test64 test extras 
-.PHONY : build32-debug build64-debug build-debug test32-debug test64-debug test-debug
+.PHONY : test extras bootstrap configure packages grammar
 .PHONY : doc install websites-linux  release install-bin
 .PHONY : copy-doc gen-doc gendoc fbuild speed tarball
 .PHONY : weblink flx tools web-plugins toolchain-plugins rtl copy lib
-.PHONY : sdltest extract packages
+.PHONY : sdltest
