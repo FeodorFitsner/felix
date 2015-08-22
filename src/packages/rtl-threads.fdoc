@@ -193,11 +193,8 @@ flx_native_thread_t get_current_native_thread() { return pthread_self(); }
 
 static void *get_stack_pointer() { 
   unsigned long x; 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC diagnostic warning "-Wno-return-local-addr"
-  return &x; 
-#pragma GCC diagnostic pop
+  void *y = (void*)&x; 
+  return y;
 }
 
 extern "C" void *flx_pthread_start_wrapper(void *e)
@@ -332,23 +329,11 @@ namespace flx { namespace pthread {
 
 flx_native_thread_t get_current_native_thread() { return GetCurrentThread(); }
 
-#if defined(_MSC_VER)
-#  pragma warning(push)
-#  pragma warning(disable:4172)
-#endif //defined(_MSC_VER)
-
 static void *get_stack_pointer() { 
   unsigned long x; 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC diagnostic warning "-Wno-return-local-addr"
-  return &x; 
-#pragma GCC diagnostic pop
+  void *y = (void*)&x;
+  return y;
 }
-
-#if defined(_MSC_VER)
-#  pragma warning(pop)
-#endif //defined(_MSC_VER)
 
 DWORD WINAPI flx_pthread_start_wrapper(LPVOID e)
 {
@@ -507,7 +492,7 @@ public:
 };
 
 class PTHREAD_EXTERN flx_usr_mutex_t {
-  ::std::timed_mutex mutex;
+  ::std::mutex mutex;
   ::flx::pthread::thread_control_base_t *tc;
 public:
   flx_usr_mutex_t(flx_mutex_t const&) = delete; // uncopyable
@@ -523,6 +508,8 @@ public:
 @
 @tangle pthread_mutex.cpp
 #include "pthread_mutex.hpp"
+#include <thread>
+#include <chrono>
 
 namespace flx { namespace pthread {
 flx_mutex_t::flx_mutex_t(flx_mutex_t const&){} // uncopyable
@@ -542,9 +529,10 @@ flx_mutex_locker_t::~flx_mutex_locker_t() { p->unlock(); }
 flx_usr_mutex_t::flx_usr_mutex_t (thread_control_base_t *tc_): tc(tc_) {}
 void flx_usr_mutex_t::lock()
 {
-  while (!mutex.try_lock_for(::std::chrono::nanoseconds (200)))
+  while (!mutex.try_lock())
   {
     tc->yield();
+    ::std::this_thread::sleep_for (::std::chrono::nanoseconds (200));
   }
 }
 void flx_usr_mutex_t::unlock() { mutex.unlock(); }
@@ -1368,11 +1356,8 @@ waitable_bool::signal_true()
 namespace flx { namespace pthread {
 static void *get_stack_pointer() { 
   unsigned long x; 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC diagnostic warning "-Wno-return-local-addr"
-  return &x; 
-#pragma GCC diagnostic pop
+  void *y = (void*)&x;
+  return y; 
 }
 
 thread_control_base_t::~thread_control_base_t(){}

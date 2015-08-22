@@ -209,7 +209,7 @@ def make_c_builder(ctx, *args, includes=[], libpaths=[], flags=[], **kwargs):
             'optimize_flags': ['-fomit-frame-pointer']}),
         ({'posix'},
             {'warnings': ['all', 'fatal-errors'],
-            'flags': ['-fno-common', '-fvisibility=hidden', '-fno-strict-aliasing'] + flags,
+            'flags': ['-std=gnu89', '-fno-common', '-fvisibility=hidden', '-fno-strict-aliasing'] + flags,
             'optimize_flags': ['-fomit-frame-pointer']}),
         ({'windows'}, {
             'flags': ['/GR', '/MD', '/EHs', '/wd4291'] + flags,
@@ -244,7 +244,7 @@ def make_cxx_builder(ctx, *args, includes=[], libpaths=[], flags=[], **kwargs):
                 'no-return-type-c-linkage',
                 ],
             'flags': [
-                '-w','-fno-common', '-fno-strict-aliasing', 
+                '-w', '-fno-common', '-fno-strict-aliasing', 
                 '-fvisibility=hidden', '-std=c++11'] + flags,
             'optimize_flags': ['-fomit-frame-pointer']}),
         ({'posix'}, {
@@ -398,6 +398,12 @@ def src_dir(ctx):
 
 # ------------------------------------------------------------------------------
 
+def hack_toolchain_name(s):
+  if s in ["gcc-5",]: return "gcc"
+  if s in ["clang","gcc"]: return s
+  return s
+  
+   
 @fbuild.db.caches
 def configure(ctx):
     """Configure Felix."""
@@ -480,6 +486,21 @@ def configure(ctx):
     # overwrite or add *.fpc files to the config directory
     call('buildsystem.post_config.copy_user_fpcs', ctx)
 
+    # set the toolchain
+    dst = ctx.buildroot / 'host/config/toolchain.fpc'
+    if 'macosx' in target.platform:
+        toolchain = "toolchain_"+hack_toolchain_name(str(target.c.static))+"_osx"
+    elif "windows" in target.platform:
+        toolchain= "toolchain_msvc_win32"
+    else:
+        toolchain = "toolchain_"+hack_toolchain_name(str(target.c.static))+"_linux"
+    print("**********************************************")
+    print("SETTING TOOLCHAIN " + toolchain)
+    print("**********************************************")
+    f = open(dst,"w")
+    f.write ("toolchain: "+toolchain+"\n")
+    f.close()
+
     # make Felix representation of whole build config
     call('buildsystem.show_build_config.build',ctx)
 
@@ -553,11 +574,11 @@ def build(ctx):
         debug=ctx.options.debug,
         flags=['--test=' + ctx.buildroot])
 
-    print("[fbuild] [Felix] BUILDING PLUGINS")
-    call('buildsystem.plugins.build', phases.target, felix)
-
     # HACK!!!!!
     os.system("cp build/release/host/bin/bootflx build/release/host/bin/flx")
+
+    print("[fbuild] [Felix] BUILDING PLUGINS")
+    call('buildsystem.plugins.build', phases.target, felix)
 
     print("[fbuild] BUILD COMPLETE")
     return phases, iscr, felix
