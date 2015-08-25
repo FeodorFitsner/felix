@@ -338,7 +338,8 @@ class PosixProcess {
 
   instance Process_class[Posix, process_status_t] 
   {
-    gen popen_in: string -> Cstdio::ifile = 'popen($1.c_str(), "r")';
+    gen popen_in: string -> Cstdio::ifile = 'popen($1.c_str(), "r")' 
+      requires C89_headers::stdio_h;
     gen pclose: Cstdio::ifile -> process_status_t = "pclose($1)";
   }
   inherit Process_class[Posix, process_status_t];
@@ -800,7 +801,7 @@ class Shell_class[OS, process_status_t]
     args.create_system_command.system
   ;
 
-  gen system[T with Streamable[T,string]] (args:T) : int =
+  gen system[T with Iterable[T,string]] (args:T) : int =
   {
     var lst = Empty[string];
     for arg in args do 
@@ -815,7 +816,7 @@ class Shell_class[OS, process_status_t]
     args.create_popen_command.get_stdout
   ;
  
-  gen get_stdout[T with Streamable[T,string]] (args:T) : int * string =
+  gen get_stdout[T with Iterable[T,string]] (args:T) : int * string =
   {
     var lst = Empty[string];
     for arg in args do 

@@ -63,23 +63,28 @@ open class Fibres
     new ::std::list<::flx::rtl::fthread_t*>)""";
   ;
   proc delete_fibre_scheduler : fibre_scheduler = """
-    $1->gcp->collector->remove_root($1->ft);
+    if ($1->ft) $1->collector->remove_root($1->ft);
     for(
-     ::std::list<::flx::rtl::fthread_t*>::iterator p = $1.active->begin();
+     ::std::list<::flx::rtl::fthread_t*>::iterator p = $1->active->begin();
      p != $1->active->end();
      p++
     )
-    $1->gcp->collector->remove_root(p);
+    $1->collector->remove_root(*p);
     delete $1->active; delete $1->ft; delete $1;
   """;
 
   //$ Spawn a fibre on a given scheduler with a given continuation.
   proc spawn_fibre: fibre_scheduler * fthread = """
-    $1->gcp->collector->add_root($2);
+    $1->collector->add_root($2);
     $1->active->push_back($2);
     $1->frun(); 
   """;
 
+  proc frun: (1->0) = "::flx::rtl::executil::frun (PTF gcp, $1);" 
+    requires header '#include "flx_executil.hpp"'
+  ;
+
+ 
   //$ The type of the stop state of the fibre scheduler.
   //$ terminated: the scheduler is terminated.
   //$ blocked: the scheduler is out of threads to run.
@@ -252,6 +257,20 @@ open class Schannel
   }
   proc broadcast[T] (chan:oschannel[T], v:T) { 
     broadcast (C_hack::cast[schannel[T]] chan, v); 
+  }
+
+  // Very high power though not very efficient conversion
+  // from ischannel to iterator.
+  // Given i: ischannel[T] you can just write
+  // for j in i do .. done
+  gen iterator[T] (i:ischannel[T]) () : opt[T] = {
+  next:>
+    var y = None[T];
+    frun { var x = read i; y = Some x; };
+    match y do
+    | Some _ => yield y; goto next;
+    | None => return y;
+    done
   }
 }
 

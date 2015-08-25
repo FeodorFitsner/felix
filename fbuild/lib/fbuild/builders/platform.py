@@ -47,10 +47,6 @@ archmap = OrderedDict([
     ('darwin',    {'posix', 'bsd', 'darwin', 'macosx'}),
     ('osx',       {'posix', 'bsd', 'darwin', 'macosx'}),
 
-    ('iphone-simulator', {'posix', 'bsd', 'darwin', 'iphone', 'simulator'}),
-    ('iphone-sim',       {'posix', 'bsd', 'darwin', 'iphone', 'simulator'}),
-    ('iphone',           {'posix', 'bsd', 'darwin', 'iphone'}),
-])
 
 # ------------------------------------------------------------------------------
 
@@ -153,6 +149,8 @@ def shared_lib_prefix(ctx, platform=None):
 def shared_lib_suffix(ctx, platform=None):
     platform = platform if platform else guess_platform(ctx)
     if 'windows' in platform or 'cygwin' in platform:
+        return '.dll'
+    elif 'cygwin' in platform:
         return '.dll'
     elif 'darwin' in platform:
         return '.dylib'
